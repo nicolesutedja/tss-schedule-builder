@@ -1,0 +1,214 @@
+#tss-sched-ext-root {
+  all: initial;
+  position: fixed;
+  z-index: 2147483000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+#tss-sched-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #182B49;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  z-index: 2147483000;
+}
+#tss-sched-toggle:hover { background: #24406b; }
+
+#tss-sched-panel {
+  position: fixed;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #1a1a1a;
+  min-width: 480px;
+  min-height: 320px;
+}
+#tss-sched-panel.hidden { display: none; }
+#tss-sched-panel.collapsed .tss-sched-body,
+#tss-sched-panel.collapsed #tss-sched-resize-handle { display: none; }
+#tss-sched-panel.collapsed { height: auto !important; }
+
+.tss-sched-header {
+  background: #182B49;
+  color: #fff;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: move;
+  user-select: none;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tss-sched-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tss-sched-header select {
+  font-size: 11px;
+  padding: 3px 4px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: #24406b;
+  color: #fff;
+  max-width: 110px;
+}
+.tss-sched-header button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.tss-sched-header button:hover { background: rgba(255,255,255,0.15); }
+
+.tss-sched-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.tss-sched-list {
+  width: 40%;
+  max-width: 300px;
+  border-right: 1px solid #e2e2e2;
+  overflow-y: auto;
+  padding: 10px;
+  font-size: 13px;
+}
+.tss-sched-empty { color: #888; font-size: 13px; }
+
+.tss-sched-course { margin-bottom: 12px; }
+.tss-sched-course-title {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #182B49;
+  margin-bottom: 4px;
+}
+.tss-sched-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tss-sched-row:hover { background: #f2f4f8; }
+.tss-sched-row input { margin-top: 3px; }
+.tss-sched-row-main { display: flex; flex-direction: column; }
+.tss-sched-row-sub { color: #666; font-size: 11px; }
+.tss-sched-row-note {
+  display: block;
+  color: #a15c00;
+  font-size: 10px;
+  margin-top: 1px;
+}
+
+.tss-sched-grid {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding: 10px 14px;
+}
+
+.tss-sched-daycols-header {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-left: 46px;
+  margin-bottom: 4px;
+}
+.tss-sched-daycol-label {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #182B49;
+}
+
+.tss-sched-grid-scroll {
+  position: relative;
+  margin-left: 46px;
+  border-left: 1px solid #ddd;
+}
+
+.tss-sched-hours {
+  position: absolute;
+  left: -46px;
+  top: 0;
+  width: 40px;
+}
+.tss-sched-hour {
+  position: absolute;
+  font-size: 10px;
+  color: #999;
+  transform: translateY(-50%);
+  width: 40px;
+  text-align: right;
+}
+
+.tss-sched-columns {
+  position: relative;
+  height: 100%;
+}
+
+.tss-sched-block {
+  position: absolute;
+  border-radius: 6px;
+  color: #fff;
+  padding: 3px 5px;
+  font-size: 11px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  cursor: default;
+}
+.tss-sched-block.conflict {
+  outline: 2px solid #7a0000;
+  outline-offset: -2px;
+}
+.tss-sched-block-title { font-weight: 700; }
+.tss-sched-block-sub { opacity: 0.9; }
+
+.tss-sched-weekend-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #a15c00;
+  background: #fff6e5;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.tss-sched-conflict-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #7a0000;
+  background: #ffe9e9;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+#tss-sched-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, #bbb 50%);
+}
