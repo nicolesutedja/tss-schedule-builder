@@ -1070,9 +1070,102 @@
       }
     });
 
-    const appStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map((s) => s.outerHTML)
-      .join("\n");
+    // Self-contained print styles. We deliberately do NOT pull in the host
+    // page's own <style>/<link> tags (previous approach) — that grabbed
+    // whichever stylesheets happened to be in the surrounding page's DOM
+    // (which could hide our elements via their own print rules) while
+    // never including our real styles.css, since content-script CSS isn't
+    // inserted as a DOM node. Everything the printout needs is defined here.
+    const printStyles = `
+      * {
+        box-sizing: border-box;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+      }
+      html, body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        color: #1a1a1a;
+      }
+      .tss-pdf-container { padding: 20px 20px 20px 66px; }
+      .tss-pdf-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #182B49;
+      }
+      .tss-pdf-plan-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: #182B49;
+      }
+      .tss-pdf-timestamp {
+        font-size: 11px;
+        color: #666;
+      }
+      .tss-sched-daycols-header {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        margin-left: 46px;
+        margin-bottom: 4px;
+      }
+      .tss-sched-daycol-label {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: #182B49;
+      }
+      .tss-sched-grid-scroll {
+        position: relative;
+        margin-left: 46px;
+        border-left: 1px solid #ddd;
+        border-right: 1px solid #ddd;
+        border-bottom: 1px solid #ddd;
+        background-image: linear-gradient(to bottom, #e8e8e8 1px, transparent 1px);
+        background-size: 100% var(--hour-height, 60px);
+        background-repeat: repeat-y;
+      }
+      .tss-sched-hours {
+        position: absolute;
+        left: -46px;
+        top: 0;
+        width: 40px;
+      }
+      .tss-sched-hour {
+        position: absolute;
+        font-size: 10px;
+        color: #555;
+        transform: translateY(-50%);
+        width: 40px;
+        text-align: right;
+      }
+      .tss-sched-columns { position: relative; height: 100%; }
+      .tss-sched-block {
+        position: absolute;
+        color: #ffffff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        text-align: center;
+        padding: 5px 4px;
+        gap: 2px;
+        overflow: hidden;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.35);
+      }
+      .tss-block-course-line { font-weight: 800; font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      .tss-block-time-line { font-size: 9px; font-weight: 600; line-height: 1.2; opacity: 0.95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      .tss-block-room-line { font-size: 9px; line-height: 1.2; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      .tss-block-instructor-line { font-size: 9px; line-height: 1.2; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      .tss-pdf-scale-wrap {
+        transform-origin: top left;
+      }
+      @page { size: portrait; margin: 12mm; }
+    `;
 
     const iframe = document.createElement("iframe");
     Object.assign(iframe.style, {
@@ -1095,15 +1188,14 @@
       <!DOCTYPE html>
       <html>
       <head>
-      <title>${escapeHtml(activePlan)}-Schedule</title>
-      ${appStyles}
-      <link rel="stylesheet" href="pdf-print.css">
+      <title>${escapeHtml(activePlan)} Schedule</title>
+      <style>${printStyles}</style>
       </head>
       <body>
       <div class="tss-pdf-container">
         <div class="tss-pdf-header">
-          <h1>Weekly Schedule — ${escapeHtml(activePlan)}</h1>
-          <p>Generated: ${new Date().toLocaleDateString()}</p>
+          <span class="tss-pdf-plan-name">${escapeHtml(activePlan)}</span>
+          <span class="tss-pdf-timestamp">${new Date().toLocaleString()}</span>
         </div>
       </div>
       </body>
@@ -1112,8 +1204,24 @@
     doc.close();
 
     const container = doc.querySelector(".tss-pdf-container");
-    if (clonedHeader) container.appendChild(clonedHeader);
-    container.appendChild(clonedGrid);
+    const scaleWrap = doc.createElement("div");
+    scaleWrap.className = "tss-pdf-scale-wrap";
+    if (clonedHeader) scaleWrap.appendChild(clonedHeader);
+    scaleWrap.appendChild(clonedGrid);
+    container.appendChild(scaleWrap);
+
+    // Shrink the whole calendar to fit within one printed portrait page.
+    // The on-screen grid height is sized for a scrollable panel and can
+    // easily be taller than a single page, which is what pushed the bottom
+    // rows onto a second sheet. We use `zoom` (not `transform: scale`)
+    // because it affects layout size directly, so the page-break
+    // calculation sees the smaller height instead of the original one.
+    const originalGridHeight = parseFloat(gridEl.style.height) || gridEl.getBoundingClientRect().height;
+    const PAGE_BUDGET_PX = 780; // usable height left for the grid on a portrait page after margins + our header
+    if (originalGridHeight > PAGE_BUDGET_PX) {
+      const zoomFactor = Math.max(0.45, PAGE_BUDGET_PX / originalGridHeight);
+      scaleWrap.style.zoom = zoomFactor;
+    }
 
     iframe.onload = async () => {
       if (iframe.contentDocument.fonts) {
