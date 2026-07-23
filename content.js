@@ -20,8 +20,6 @@
   const DAY_COLS = { M: 0, Tu: 1, W: 2, Th: 3, F: 4 };
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640 };
-
-  // Unified dark color palette options (navy, dark purple, deep slate, no red)
   const PALETTES = [
     {
       id: 'navy',
@@ -62,11 +60,10 @@
   let panelState = { ...DEFAULT_PANEL, collapsed: false };
   let panelOpen = false;
   let activeExamFilter = "ALL"; // "ALL", "Final", or "Midterm"
-  let currentView = "schedule"; // "schedule", "help", or "exams"
+  let currentView = "schedule"; // "schedule", "help", "exams", or "about"
 
   // ---------- 3. Helpers ----------
   function colorForCourse(courseCode) {
-    // Returns the uniform single dark color from the active theme
     return activePalette.colors[0];
   }
 
@@ -374,17 +371,21 @@
     const bodyEl = document.querySelector(".tss-sched-body");
     const helpEl = document.getElementById("tss-sched-help-view");
     const examsEl = document.getElementById("tss-sched-exams-view");
+    const aboutEl = document.getElementById("tss-sched-about-view");
 
     const helpBtn = document.getElementById("tss-sched-help-btn");
     const examsBtn = document.getElementById("tss-sched-exams-btn");
+    const aboutBtn = document.getElementById("tss-sched-about-btn");
 
-    if (!bodyEl || !helpEl || !examsEl) return;
+    if (!bodyEl || !helpEl || !examsEl || !aboutEl) return;
 
     bodyEl.style.display = "none";
     helpEl.style.display = "none";
     examsEl.style.display = "none";
+    aboutEl.style.display = "none";
     if (helpBtn) helpBtn.classList.remove("active");
     if (examsBtn) examsBtn.classList.remove("active");
+    if (aboutBtn) aboutBtn.classList.remove("active");
 
     if (currentView === "help") {
       helpEl.style.display = "flex";
@@ -393,6 +394,9 @@
       examsEl.style.display = "flex";
       if (examsBtn) examsBtn.classList.add("active");
       renderExamsList();
+    } else if (currentView === "about") {
+      aboutEl.style.display = "flex";
+      if (aboutBtn) aboutBtn.classList.add("active");
     } else {
       bodyEl.style.display = "flex";
     }
@@ -465,6 +469,7 @@
             <button id="tss-sched-plan-delete" title="Delete plan">🗑</button>
             <button id="tss-sched-exams-btn" title="View Midterms and Finals">📝 Exams</button>
             <button id="tss-sched-help-btn" title="How to use TritonSched">?</button>
+            <button id="tss-sched-about-btn" title="About TritonSched & Feedback" style="font-weight: bold; font-family: serif; font-style: italic;">ℹ</button>
             <button id="tss-sched-close" title="Close">✕</button>
           </div>
         </div>
@@ -489,6 +494,56 @@
             </div>
             <div id="tss-sched-exams-list" style="max-height: 380px; overflow-y: auto; padding-right: 4px;"></div>
             <button id="tss-sched-exams-return-btn" class="tss-primary-btn" style="margin-top: 16px;">← Return to Scheduler</button>
+          </div>
+        </div>
+
+        <!-- ABOUT & FEEDBACK VIEW -->
+        <div id="tss-sched-about-view" class="tss-sched-help-container" style="display: none; padding: 24px 20px 20px 20px;">
+          <div class="tss-help-content" style="width: 100%; max-height: 500px; overflow-y: auto; padding-right: 4px;">
+            <h2 style="margin-top: 0; color: #111827;">About TritonSched</h2>
+            <p style="font-size: 13px; color: #374151; line-height: 1.5;">
+              <strong>TritonSched</strong> is a browser extension built to help with course planning and schedule visualization for UC San Diego students using the Triton Student System (TSS). 
+              Developed by Nicole Sutedja. 
+            </p>
+            
+            <h3 style="font-size: 14px; color: #1f2937; margin-top: 16px;">Purpose</h3>
+            <p style="font-size: 13px; color: #374151; line-height: 1.5;">
+              Inspired by WebReg's old Calendar view, I built TritonSched to give students a similar clean, weekly calendar interface, with conflict checking, RMP instructor lookups, and multiple plan views, all inside of TSS itself.
+              It is currently still in Beta and I'm still making active updates. If you encounter bugs or you have feature ideas, feel free to send feedback below. 
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+            <h3 style="font-size: 15px; color: #111827; margin-top: 0;">Submit Feedback</h3>
+            
+            <div id="tss-feedback-form" style="display: flex; flex-direction: column; gap: 10px;">
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Category:</label>
+                <select id="tss-feedback-category" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 13px; background: #fff; color: #1f2937;">
+                  <option value="Bug Report">Bug / Issue</option>
+                  <option value="Feature Request">Feature Request</option>
+                  <option value="General Feedback">General Feedback</option>
+                </select>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <div style="flex: 1;">
+                  <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Name (Optional):</label>
+                  <input type="text" id="tss-feedback-name" placeholder="Your name" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 13px; box-sizing: border-box;" />
+                </div>
+                <div style="flex: 1;">
+                  <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Email (Optional):</label>
+                  <input type="email" id="tss-feedback-email" placeholder="name@ucsd.edu" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 13px; box-sizing: border-box;" />
+                </div>
+              </div>
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Your Message:</label>
+                <textarea id="tss-feedback-text" rows="3" placeholder="yap here..." style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 13px; resize: vertical; box-sizing: border-box;"></textarea>
+              </div>
+              <button id="tss-feedback-submit-btn" class="tss-primary-btn" style="background: #1B263B; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Send Feedback</button>
+              <div id="tss-feedback-success" style="display: none; color: #059669; font-size: 13px; font-weight: 500; margin-top: 4px;">✓ Thank you! Your feedback has been sent successfully.</div>
+            </div>
+
+            <button id="tss-sched-about-return-btn" class="tss-primary-btn" style="margin-top: 20px;">← Return to Scheduler</button>
           </div>
         </div>
 
@@ -551,6 +606,11 @@
       renderView();
     });
 
+    wrap.querySelector("#tss-sched-about-btn").addEventListener("click", () => {
+      currentView = currentView === "about" ? "schedule" : "about";
+      renderView();
+    });
+
     wrap.querySelector("#tss-sched-return-btn").addEventListener("click", () => {
       currentView = "schedule";
       renderView();
@@ -561,6 +621,53 @@
       renderView();
     });
 
+    wrap.querySelector("#tss-sched-about-return-btn").addEventListener("click", () => {
+      currentView = "schedule";
+      renderView();
+    });
+
+  // Feedback submission handler
+  const feedbackSubmitBtn = wrap.querySelector("#tss-feedback-submit-btn");
+  feedbackSubmitBtn.addEventListener("click", async () => {
+    const category = wrap.querySelector("#tss-feedback-category").value;
+    const name = wrap.querySelector("#tss-feedback-name").value.trim();
+    const email = wrap.querySelector("#tss-feedback-email").value.trim();
+    const text = wrap.querySelector("#tss-feedback-text").value.trim();
+    const successMsg = wrap.querySelector("#tss-feedback-success");
+
+    if (!text) {
+      alert("Please enter some feedback text before submitting.");
+      return;
+    }
+
+    feedbackSubmitBtn.disabled = true;
+    feedbackSubmitBtn.textContent = "Sending...";
+
+    try {
+      await fetch("https://script.google.com/macros/s/AKfycbzNZ00Ki7dTlYk7yvHsmuQzi1AUiWW8iYylN1LXqADS1YLZwTsrGO3moPhMspAFDcLAmw/exec", {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ category, name, email, text })
+      });
+
+      successMsg.style.display = "block";
+      wrap.querySelector("#tss-feedback-text").value = "";
+      wrap.querySelector("#tss-feedback-name").value = "";
+      wrap.querySelector("#tss-feedback-email").value = "";
+      setTimeout(() => {
+        successMsg.style.display = "none";
+      }, 5000);
+    } catch (err) {
+      console.error("Error submitting feedback:", err);
+      alert("Failed to send feedback. Please try again later.");
+    } finally {
+      feedbackSubmitBtn.disabled = false;
+      feedbackSubmitBtn.textContent = "Send Feedback";
+    }
+  });
     const filterSelect = wrap.querySelector("#tss-exam-filter-select");
     filterSelect.addEventListener("change", (e) => {
       activeExamFilter = e.target.value;
@@ -812,8 +919,7 @@
       }
       entries.forEach(({ sec, m, conflict }) => {
         const col = DAY_COLS[day];
-        // Conflicts remain visually distinct in dark orange/amber rather than red
-        const color = conflict ? "#d12a00" : colorForCourse(sec.courseCode);
+        const color = conflict ? "#b61111" : colorForCourse(sec.courseCode);
         const top = Math.max(0, (m.startMin - dynamicStartMin) * pxPerMin);
         const height = Math.max(20, (m.endMin - m.startMin) * pxPerMin);
         const method = m.method ? ` (${m.method})` : "";
