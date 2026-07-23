@@ -353,8 +353,18 @@
       if (!resizing) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
-      panelState.width = Math.max(480, startW + dx);
-      panelState.height = Math.max(320, startH + dy);
+
+      // Calculate max available space based on current window size and current panel position
+      const currentLeft = panelState.left != null ? panelState.left : (window.innerWidth - panelState.right - startW);
+      const currentTop = panelState.top;
+
+      const maxWidth = window.innerWidth - currentLeft - 20;   // Leave a 20px padding from the right edge
+      const maxHeight = window.innerHeight - currentTop - 20; // Leave a 20px padding from the bottom edge
+
+      // Apply bounds: minimum 480x320, up to available screen space
+      panelState.width = Math.min(Math.max(480, startW + dx), Math.max(480, maxWidth));
+      panelState.height = Math.min(Math.max(320, startH + dy), Math.max(320, maxHeight));
+
       panelEl.style.width = panelState.width + "px";
       panelEl.style.height = panelState.height + "px";
     });
