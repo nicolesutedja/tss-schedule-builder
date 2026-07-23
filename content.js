@@ -21,7 +21,7 @@
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const GRID_START_MIN = 7 * 60; // 7:00 AM
   const GRID_END_MIN = 22 * 60; // 10:00 PM
-  const DEFAULT_PANEL = { top: 90, left: null, right: 20, width: 760, height: 560 };
+  const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640 };
 
   let catalog = {}; // pkgId -> section object
   let plans = { "Plan A": [] }; // planName -> array of pkgIds
@@ -458,14 +458,42 @@
     const gridEl = document.getElementById("tss-sched-grid");
     if (!gridEl) return;
     const selected = currentSelected();
+    const selectedSections = Array.from(selected).map((pkgId) => catalog[pkgId]).filter(Boolean);
 
-    const totalMin = GRID_END_MIN - GRID_START_MIN;
-    const pxPerMin = 1.1;
+    // 1. Calculate minTime & maxTime strictly from selected classes
+    let minTime = Infinity;
+    let maxTime = -Infinity;
+
+    selectedSections.forEach((sec) => {
+      sec.meetings.forEach((m) => {
+        if (m.startMin != null && m.endMin != null) {
+          minTime = Math.min(minTime, m.startMin);
+          maxTime = Math.max(maxTime, m.endMin);
+        }
+      });
+    });
+
+    // Fallback defaults if no classes are selected or times aren't parsed yet
+    if (minTime === Infinity || maxTime === -Infinity) {
+      minTime = 8 * 60;  // 8:00 AM
+      maxTime = 17 * 60; // 5:00 PM
+    }
+
+    // 2. Add a 30-minute buffer padding above the earliest start & below the latest end
+    // Snap to full hour boundaries
+    const dynamicStartMin = Math.max(0, Math.floor((minTime - 30) / 60) * 60);
+    const dynamicEndMin = Math.min(24 * 60, Math.ceil((maxTime + 30) / 60) * 60);
+
+    const totalMin = dynamicEndMin - dynamicStartMin;
+    
+    // 3. Dynamically adjust pxPerMin so short schedules scale vertically and stay readable
+    const pxPerMin = Math.max(1.3, 520 / totalMin);
     const gridHeight = totalMin * pxPerMin;
 
+    // 4. Generate Hour Labels
     let hourLabels = "";
-    for (let t = GRID_START_MIN; t <= GRID_END_MIN; t += 60) {
-      const top = (t - GRID_START_MIN) * pxPerMin;
+    for (let t = dynamicStartMin; t <= dynamicEndMin; t += 60) {
+      const top = (t - dynamicStartMin) * pxPerMin;
       const h = Math.floor(t / 60);
       const label = h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`;
       hourLabels += `<div class="tss-sched-hour" style="top:${top}px">${label}</div>`;
@@ -476,9 +504,8 @@
     let blocks = "";
     let weekendNotes = [];
     let conflictPairs = [];
-    const selectedSections = Array.from(selected).map((pkgId) => catalog[pkgId]).filter(Boolean);
 
-    // Flatten to per-day-meeting entries first so we can detect overlaps
+    // Flatten to per-day-meeting entries
     const perDay = { M: [], Tu: [], W: [], Th: [], F: [] };
     selectedSections.forEach((sec) => {
       sec.meetings.forEach((m) => {
@@ -508,12 +535,34 @@
       entries.forEach(({ sec, m, conflict }) => {
         const col = DAY_COLS[day];
         const color = conflict ? "#d64545" : colorForCourse(sec.courseCode);
-        const top = Math.max(0, (m.startMin - GRID_START_MIN) * pxPerMin);
-        const height = Math.max(16, (m.endMin - m.startMin) * pxPerMin);
+        
+        const top = Math.max(0, (m.startMin - dynamicStartMin) * pxPerMin);
+        const height = Math.max(20, (m.endMin - m.startMin) * pxPerMin);
+        
+        const method = m.method ? ` (${m.method})` : "";
+        const courseTitle = `${sec.courseCode}${method}`;
+        const timeRange = `${m.start} - ${m.end}`;
+        const location = m.location || "TBA";
+        const instructor = m.instructor || "Staff";
+
         blocks += `
-          <div class="tss-sched-block${conflict ? " conflict" : ""}" style="left:calc(${col} * (100% / 5)); width:calc(100% / 5 - 4px); top:${top}px; height:${height}px; background:${color};" title="${escapeHtml(sec.label)} (${escapeHtml(m.method)})\n${escapeHtml(m.start)} - ${escapeHtml(m.end)}\n${escapeHtml(m.location)}\n${escapeHtml(m.instructor)}">
-            <div class="tss-sched-block-title">${escapeHtml(sec.courseCode)}${conflict ? " ⚠" : ""}</div>
-            <div class="tss-sched-block-sub">${escapeHtml(m.method || "")} · ${escapeHtml(m.start)}</div>
+          <div class="tss-sched-block${conflict ? " conflict" : ""}" 
+              style="left:calc(${col} * (100% / 5)); width:calc(100% / 5 - 4px); top:${top}px; height:${height}px; background:${color};" 
+              title="${escapeHtml(sec.label)} (${escapeHtml(m.method)})\n${escapeHtml(timeRange)}\n${escapeHtml(location)}\n${escapeHtml(instructor)}">
+            
+            <div class="tss-block-course-line">
+              ${escapeHtml(courseTitle)}${conflict ? " ⚠" : ""}
+            </div>
+            <div class="tss-block-time-line">
+              ⏰ ${escapeHtml(timeRange)}
+            </div>
+            <div class="tss-block-room-line">
+              📍 ${escapeHtml(location)}
+            </div>
+            <div class="tss-block-instructor-line">
+              👤 ${escapeHtml(instructor)}
+            </div>
+
           </div>
         `;
       });
