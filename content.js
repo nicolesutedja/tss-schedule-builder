@@ -452,11 +452,11 @@
     wrap.id = "tss-sched-ext-root";
     wrap.innerHTML = `
         <button id="tss-sched-toggle" title="TritonSched">
-          <img src="${chrome.runtime.getURL("logo.png")}" alt="TritonSched logo">
+          <img src="${chrome.runtime.getURL("logo48.svg")}" alt="TritonSched logo">
         </button>      
         <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
-          <span>TritonSched 1.0 (BETA)</span>
+          <span>TritonSched 1.0.0 (BETA)</span>
           <div class="tss-sched-header-controls">
             <select id="tss-sched-plan-select" title="Switch schedule plan"></select>
             <button id="tss-sched-plan-new" title="New plan">+</button>
