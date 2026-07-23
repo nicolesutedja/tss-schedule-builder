@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  // ---------- 1. Inject the page-context script ----------
+  // ---------- 1. Inject Page Script ----------
   function injectPageScript() {
     const s = document.createElement("script");
     s.src = chrome.runtime.getURL("inject.js");
@@ -10,57 +10,34 @@
     };
     (document.head || document.documentElement).appendChild(s);
   }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", injectPageScript, { once: true });
   } else {
     injectPageScript();
   }
 
-  // ---------- 2. State & Palettes ----------
+// ---------- 2. State & Palettes ----------
   const DAY_COLS = { M: 0, Tu: 1, W: 2, Th: 3, F: 4 };
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640 };
   const PALETTES = [
-    {
-      id: 'navy',
-      name: 'Navy',
-      colors: ['rgb(38, 61, 102)']
-    },
-    {
-      id: 'purple',
-      name: 'Purple',
-      colors: ['#482d55']
-    },
-    {
-      id: 'charcoal',
-      name: 'Charcoal',
-      colors: ['#3b3b3b']
-    },
-    {
-      id: 'green',
-      name: 'Green',
-      colors: ['#1b3b2b']
-    },
-    {
-      id: 'magenta',
-      name: 'Magenta',
-      colors: ['#501e3b']
-    },
-    {
-      id: 'brown',
-      name: 'Brown',
-      colors: ['#411f04']
-    }
+    { id: "navy", colors: ["rgb(38, 61, 102)"] },
+    { id: "purple", colors: ["#482d55"] },
+    { id: "charcoal", colors: ["#3b3b3b"] },
+    { id: "green", colors: ["#1b3b2b"] },
+    { id: "magenta", colors: ["#501e3b"] },
+    { id: "brown", colors: ["#411f04"] }
   ];
 
   let activePalette = PALETTES[0];
-  let catalog = {}; // pkgId -> section object
-  let plans = { "Plan A": [] }; // planName -> array of pkgIds
+  let catalog = {};
+  let plans = { "Plan A": [] };
   let activePlan = "Plan A";
   let panelState = { ...DEFAULT_PANEL, collapsed: false };
   let panelOpen = false;
-  let activeExamFilter = "ALL"; // "ALL", "Final", or "Midterm"
-  let currentView = "schedule"; // "schedule", "help", "exams", or "about"
+  let activeExamFilter = "ALL";
+  let currentView = "schedule";
 
   // ---------- 3. Helpers ----------
   function colorForCourse(courseCode) {
@@ -69,7 +46,11 @@
 
   function escapeHtml(str) {
     return String(str == null ? "" : str).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
     }[c]));
   }
 
@@ -104,14 +85,14 @@
 
       if (isFinal || isMidterm) {
         const exMatch = line.match(/(?:Final Examination|Midterm Examination|Midterm)\s+([A-Za-z]+,\s*[A-Za-z]+\s+\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z]+\s+\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}:\d{2}\s?[AP]M)\s*-\s*(\d{1,2}:\d{2}\s?[AP]M)(?:\s+@?\s*(.+))?/i);
-        
+
         if (exMatch) {
           exams.push({
             type: isFinal ? "Final" : "Midterm",
             date: exMatch[1].trim(),
             time: `${exMatch[2]} - ${exMatch[3]}`,
             location: exMatch[4] ? exMatch[4].trim() : "TBA",
-            raw: line,
+            raw: line
           });
         } else {
           exams.push({
@@ -119,7 +100,7 @@
             date: "See schedule details",
             time: line.replace(/^Final Examination|^Midterm Examination|^Midterm/i, "").trim(),
             location: "TBA",
-            raw: line,
+            raw: line
           });
         }
         continue;
@@ -134,24 +115,27 @@
       let location = "";
       const atIdx = rest.indexOf("@");
       if (atIdx !== -1) location = rest.slice(atIdx + 1).trim();
+
       meetings.push({
         days,
         start,
         end,
         startMin: parseTimeToMinutes(start),
         endMin: parseTimeToMinutes(end),
-        location,
+        location
       });
     }
     return { meetings, exams };
   }
 
-  // ---------- 4. Ingest captured events ----------
+  // ---------- 4. Event Ingestion ----------
   function ingestEvents(events) {
     let changed = false;
+
     for (const ev of events) {
       const pkgId = ev.EventPkgObjid;
       if (!pkgId) continue;
+
       const label = ev.EventPkgText || "";
       const courseCode = label.split("(")[0].trim() || label;
 
@@ -166,7 +150,7 @@
           waitlist: ev.EventPkgNumOnWaitl,
           meetings: [],
           exams: [],
-          notes: [],
+          notes: []
         };
         changed = true;
       }
@@ -184,7 +168,7 @@
         ...m,
         method: ev.TeachingMethod_Text,
         instructor: ev.InstructorName,
-        eventId: ev.EventID,
+        eventId: ev.EventID
       }));
 
       for (const pm of parsed) {
@@ -218,6 +202,7 @@
         }
       }
     }
+
     if (changed) {
       persist();
       render();
@@ -234,9 +219,7 @@
         tss_schedule_panel_state: panelState,
         tss_schedule_palette: activePalette.id
       });
-    } catch (e) {
-      /* ignore extension reload errors */
-    }
+    } catch (e) {}
   }
 
   function loadPersisted(cb) {
@@ -278,7 +261,7 @@
     }
   }
 
-  // ---------- 6. Message listener ----------
+  // ---------- 6. Message Listener ----------
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     const msg = event.data;
@@ -320,10 +303,13 @@
       if (!dragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
+
+      const maxTop = window.innerHeight - 60;
+      panelState.top = Math.max(0, Math.min(startTop + dy, maxTop));
       panelState.left = Math.max(0, startLeft + dx);
-      panelState.top = Math.max(0, startTop + dy);
-      panelEl.style.left = panelState.left + "px";
+
       panelEl.style.top = panelState.top + "px";
+      panelEl.style.left = panelState.left + "px";
       panelEl.style.right = "auto";
     });
 
@@ -354,14 +340,12 @@
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
 
-      // Calculate max available space based on current window size and current panel position
-      const currentLeft = panelState.left != null ? panelState.left : (window.innerWidth - panelState.right - startW);
+      const currentLeft = panelState.left != null ? panelState.left : window.innerWidth - panelState.right - startW;
       const currentTop = panelState.top;
 
-      const maxWidth = window.innerWidth - currentLeft - 20;   // Leave a 20px padding from the right edge
-      const maxHeight = window.innerHeight - currentTop - 20; // Leave a 20px padding from the bottom edge
+      const maxWidth = window.innerWidth - currentLeft - 20;
+      const maxHeight = window.innerHeight - currentTop - 20;
 
-      // Apply bounds: minimum 480x320, up to available screen space
       panelState.width = Math.min(Math.max(480, startW + dx), Math.max(480, maxWidth));
       panelState.height = Math.min(Math.max(320, startH + dy), Math.max(320, maxHeight));
 
@@ -393,6 +377,7 @@
     helpEl.style.display = "none";
     examsEl.style.display = "none";
     aboutEl.style.display = "none";
+
     if (helpBtn) helpBtn.classList.remove("active");
     if (examsBtn) examsBtn.classList.remove("active");
     if (aboutBtn) aboutBtn.classList.remove("active");
@@ -433,7 +418,7 @@
           examItems.push({
             courseCode: sec.courseCode,
             label: sec.label,
-            ...ex,
+            ...ex
           });
         }
       });
@@ -471,7 +456,7 @@
         </button>      
         <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
-          <span>TritonSched (BETA) </span>
+          <span>TritonSched 1.0 (BETA)</span>
           <div class="tss-sched-header-controls">
             <select id="tss-sched-plan-select" title="Switch schedule plan"></select>
             <button id="tss-sched-plan-new" title="New plan">+</button>
@@ -483,6 +468,7 @@
             <button id="tss-sched-close" title="Close">✕</button>
           </div>
         </div>
+        
         <div class="tss-sched-body">
           <div id="tss-sched-list" class="tss-sched-list"></div>
           <div id="tss-sched-grid" class="tss-sched-grid"></div>
@@ -508,8 +494,8 @@
         </div>
 
         <!-- ABOUT & FEEDBACK VIEW -->
-        <div id="tss-sched-about-view" class="tss-sched-help-container" style="display: none; padding: 24px 20px 20px 20px;">
-          <div class="tss-help-content" style="width: 100%; max-height: 500px; overflow-y: auto; padding-right: 4px;">
+        <div id="tss-sched-about-view" class="tss-sched-help-container" style="display: none; flex-direction: column; height: 100%; overflow-y: auto; box-sizing: border-box; padding: 24px 20px 20px 20px;">
+          <div style="padding-right: 4px;">
             <h2 style="margin-top: 0; color: #111827;">About TritonSched</h2>
             <p style="font-size: 13px; color: #374151; line-height: 1.5;">
               <strong>TritonSched</strong> is a browser extension built to help with course planning and schedule visualization for UC San Diego students using the Triton Student System (TSS). 
@@ -526,7 +512,7 @@
 
             <h3 style="font-size: 15px; color: #111827; margin-top: 0;">Submit Feedback</h3>
             
-            <div id="tss-feedback-form" style="display: flex; flex-direction: column; gap: 10px;">
+            <div id="tss-feedback-form" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
               <div>
                 <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Category:</label>
                 <select id="tss-feedback-category" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 13px; background: #fff; color: #1f2937;">
@@ -549,18 +535,20 @@
                 <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Your Message:</label>
                 <textarea id="tss-feedback-text" rows="3" placeholder="yap here..." style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 13px; resize: vertical; box-sizing: border-box;"></textarea>
               </div>
-              <button id="tss-feedback-submit-btn" class="tss-primary-btn" style="background: #1B263B; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Send Feedback</button>
               <div id="tss-feedback-success" style="display: none; color: #059669; font-size: 13px; font-weight: 500; margin-top: 4px;">✓ Thank you! Your feedback has been sent successfully.</div>
             </div>
+          </div>
 
-            <button id="tss-sched-about-return-btn" class="tss-primary-btn" style="margin-top: 20px;">← Return to Scheduler</button>
+          <div style="padding-top: 12px; margin-top: 12px; border-top: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 10px;">
+            <button id="tss-feedback-submit-btn" class="tss-primary-btn" style="width: 100%; background: #1B263B; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; box-sizing: border-box;">Send Feedback</button>
+            <button id="tss-sched-about-return-btn" class="tss-primary-btn" style="width: 100%; box-sizing: border-box;">← Return to Scheduler</button>
           </div>
         </div>
 
         <!-- HELP VIEW -->
-        <div id="tss-sched-help-view" class="tss-sched-help-container" style="display: none;">
-          <div class="tss-help-content">
-            <h2>How to Use TritonSched</h2>
+        <div id="tss-sched-help-view" class="tss-sched-help-container" style="display: none; flex-direction: column; height: 100%; overflow-y: auto; box-sizing: border-box; padding: 24px 20px 20px 20px;">
+          <div style="flex: 1 0 auto;">
+            <h2 style="margin-top: 0; color: #111827;">How to Use TritonSched</h2>
             <div class="tss-help-steps">
               <div class="tss-help-step">
                 <div>
@@ -587,7 +575,10 @@
                 </div>
               </div>
             </div>
-            <button id="tss-sched-return-btn" class="tss-primary-btn">← Return to Scheduler</button>
+          </div>
+
+          <div style="flex-shrink: 0; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; background: #fff;">
+            <button id="tss-sched-return-btn" class="tss-primary-btn" style="width: 100%; box-sizing: border-box; background: #1B263B; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">← Return to Scheduler</button>
           </div>
         </div>
         <div id="tss-sched-resize-handle" title="Drag to resize"></div>
@@ -601,6 +592,7 @@
     applyPanelGeometry(panelEl);
     makeDraggable(panelEl, wrap.querySelector("#tss-sched-drag-handle"));
     makeResizable(panelEl, wrap.querySelector("#tss-sched-resize-handle"));
+
     toggleBtn.addEventListener("click", () => {
       panelOpen = !panelOpen;
       panelEl.classList.toggle("hidden", !panelOpen);
@@ -636,48 +628,48 @@
       renderView();
     });
 
-  // Feedback submission handler
-  const feedbackSubmitBtn = wrap.querySelector("#tss-feedback-submit-btn");
-  feedbackSubmitBtn.addEventListener("click", async () => {
-    const category = wrap.querySelector("#tss-feedback-category").value;
-    const name = wrap.querySelector("#tss-feedback-name").value.trim();
-    const email = wrap.querySelector("#tss-feedback-email").value.trim();
-    const text = wrap.querySelector("#tss-feedback-text").value.trim();
-    const successMsg = wrap.querySelector("#tss-feedback-success");
+    const feedbackSubmitBtn = wrap.querySelector("#tss-feedback-submit-btn");
+    feedbackSubmitBtn.addEventListener("click", async () => {
+      const category = wrap.querySelector("#tss-feedback-category").value;
+      const name = wrap.querySelector("#tss-feedback-name").value.trim();
+      const email = wrap.querySelector("#tss-feedback-email").value.trim();
+      const text = wrap.querySelector("#tss-feedback-text").value.trim();
+      const successMsg = wrap.querySelector("#tss-feedback-success");
 
-    if (!text) {
-      alert("Please enter some feedback text before submitting.");
-      return;
-    }
+      if (!text) {
+        alert("Please enter some feedback text before submitting.");
+        return;
+      }
 
-    feedbackSubmitBtn.disabled = true;
-    feedbackSubmitBtn.textContent = "Sending...";
+      feedbackSubmitBtn.disabled = true;
+      feedbackSubmitBtn.textContent = "Sending...";
 
-    try {
-      await fetch("https://script.google.com/macros/s/AKfycbzNZ00Ki7dTlYk7yvHsmuQzi1AUiWW8iYylN1LXqADS1YLZwTsrGO3moPhMspAFDcLAmw/exec", {
-        method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ category, name, email, text })
-      });
+      try {
+        await fetch("https://script.google.com/macros/s/AKfycbzNZ00Ki7dTlYk7yvHsmuQzi1AUiWW8iYylN1LXqADS1YLZwTsrGO3moPhMspAFDcLAmw/exec", {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ category, name, email, text })
+        });
 
-      successMsg.style.display = "block";
-      wrap.querySelector("#tss-feedback-text").value = "";
-      wrap.querySelector("#tss-feedback-name").value = "";
-      wrap.querySelector("#tss-feedback-email").value = "";
-      setTimeout(() => {
-        successMsg.style.display = "none";
-      }, 5000);
-    } catch (err) {
-      console.error("Error submitting feedback:", err);
-      alert("Failed to send feedback. Please try again later.");
-    } finally {
-      feedbackSubmitBtn.disabled = false;
-      feedbackSubmitBtn.textContent = "Send Feedback";
-    }
-  });
+        successMsg.style.display = "block";
+        wrap.querySelector("#tss-feedback-text").value = "";
+        wrap.querySelector("#tss-feedback-name").value = "";
+        wrap.querySelector("#tss-feedback-email").value = "";
+        setTimeout(() => {
+          successMsg.style.display = "none";
+        }, 5000);
+      } catch (err) {
+        console.error("Error submitting feedback:", err);
+        alert("Failed to send feedback. Please try again later.");
+      } finally {
+        feedbackSubmitBtn.disabled = false;
+        feedbackSubmitBtn.textContent = "Send Feedback";
+      }
+    });
+
     const filterSelect = wrap.querySelector("#tss-exam-filter-select");
     filterSelect.addEventListener("change", (e) => {
       activeExamFilter = e.target.value;
@@ -974,25 +966,25 @@
   // ---------- 8. Export Helpers ----------
   function generateICS(selectedSections) {
     const lines = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//TSS Schedule Helper//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH'
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//TSS Schedule Helper//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH"
     ];
 
     const dayMap = {
-      'M': 'MO', 'Mon': 'MO', 'Monday': 'MO',
-      'T': 'TU', 'Tu': 'TU', 'Tue': 'TU', 'Tuesday': 'TU',
-      'W': 'WE', 'Wed': 'WE', 'Wednesday': 'WE',
-      'Th': 'TH', 'Thu': 'TH', 'Thursday': 'TH', 'R': 'TH',
-      'F': 'FR', 'Fri': 'FR', 'Friday': 'FR',
-      'Sa': 'SA', 'Sat': 'SA', 'Saturday': 'SA',
-      'Su': 'SU', 'Sun': 'SU', 'Sunday': 'SU'
+      M: "MO", Mon: "MO", Monday: "MO",
+      T: "TU", Tu: "TU", Tue: "TU", Tuesday: "TU",
+      W: "WE", Wed: "WE", Wednesday: "WE",
+      Th: "TH", Thu: "TH", Thursday: "TH", R: "TH",
+      F: "FR", Fri: "FR", Friday: "FR",
+      Sa: "SA", Sat: "SA", Saturday: "SA",
+      Su: "SU", Sun: "SU", Sunday: "SU"
     };
 
     function getNextDateForDay(dayCode) {
-      const targetDayMap = { 'MO': 1, 'TU': 2, 'WE': 3, 'TH': 4, 'FR': 5, 'SA': 6, 'SU': 0 };
+      const targetDayMap = { MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 0 };
       const targetDay = targetDayMap[dayCode];
       const today = new Date();
       const result = new Date(today);
@@ -1004,19 +996,19 @@
       const h = Math.floor(minutesFromMidnight / 60);
       const m = minutesFromMidnight % 60;
       const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const dd = String(date.getDate()).padStart(2, '0');
-      const hh = String(h).padStart(2, '0');
-      const mi = String(m).padStart(2, '0');
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      const hh = String(h).padStart(2, "0");
+      const mi = String(m).padStart(2, "0");
       return `${yyyy}${mm}${dd}T${hh}${mi}00`;
     }
 
-    const nowStamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const nowStamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 
     selectedSections.forEach((sec) => {
       (sec.meetings || []).forEach((m, idx) => {
         const rawDays = Array.isArray(m.days) ? m.days : [m.days];
-        const byDays = rawDays.map(d => dayMap[d.trim()]).filter(Boolean);
+        const byDays = rawDays.map((d) => dayMap[d.trim()]).filter(Boolean);
 
         if (byDays.length === 0 || m.startMin == null || m.endMin == null) return;
 
@@ -1024,30 +1016,30 @@
         const dtStart = formatICSDate(firstDate, m.startMin);
         const dtEnd = formatICSDate(firstDate, m.endMin);
 
-        const methodStr = m.method ? ` (${m.method})` : '';
+        const methodStr = m.method ? ` (${m.method})` : "";
         const cleanSummary = `${sec.courseCode}${methodStr}`;
 
-        lines.push('BEGIN:VEVENT');
+        lines.push("BEGIN:VEVENT");
         lines.push(`UID:${sec.pkgId || Math.random().toString(36).substring(2)}-${idx}@tss-helper`);
         lines.push(`DTSTAMP:${nowStamp}`);
         lines.push(`DTSTART:${dtStart}`);
         lines.push(`DTEND:${dtEnd}`);
-        lines.push(`RRULE:FREQ=WEEKLY;BYDAY=${byDays.join(',')}`);
+        lines.push(`RRULE:FREQ=WEEKLY;BYDAY=${byDays.join(",")}`);
         lines.push(`SUMMARY:${cleanSummary}`);
-        lines.push(`LOCATION:${m.location || 'TBA'}`);
-        lines.push(`DESCRIPTION:Section: ${sec.label || ''}\\nInstructor: ${m.instructor || 'TBA'}\\nSeats: ${sec.seatsAvailable || 0}/${sec.seatsLimit || 0}`);
-        lines.push('END:VEVENT');
+        lines.push(`LOCATION:${m.location || "TBA"}`);
+        lines.push(`DESCRIPTION:Section: ${sec.label || ""}\\nInstructor: ${m.instructor || "TBA"}\\nSeats: ${sec.seatsAvailable || 0}/${sec.seatsLimit || 0}`);
+        lines.push("END:VEVENT");
       });
     });
 
-    lines.push('END:VCALENDAR');
-    return lines.join('\r\n');
+    lines.push("END:VCALENDAR");
+    return lines.join("\r\n");
   }
 
   function downloadFile(content, fileName, contentType) {
     const blob = new Blob([content], { type: contentType });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = fileName;
     document.body.appendChild(a);
@@ -1059,41 +1051,38 @@
   }
 
   function exportCalendarToPDF() {
-    const gridEl = document.querySelector('.tss-sched-grid-scroll');
-    const dayHeaderEl = document.querySelector('.tss-sched-daycols-header');
+    const gridEl = document.querySelector(".tss-sched-grid-scroll");
+    const dayHeaderEl = document.querySelector(".tss-sched-daycols-header");
 
     if (!gridEl) {
-      alert('No schedule calendar available to export.');
+      alert("No schedule calendar available to export.");
       return;
     }
 
-    const originalBlocks = gridEl.querySelectorAll('.tss-sched-block');
+    const originalBlocks = gridEl.querySelectorAll(".tss-sched-block");
     const clonedGrid = gridEl.cloneNode(true);
-    const clonedBlocks = clonedGrid.querySelectorAll('.tss-sched-block');
+    const clonedBlocks = clonedGrid.querySelectorAll(".tss-sched-block");
 
     originalBlocks.forEach((origBlock, index) => {
       if (clonedBlocks[index]) {
         const computedBg = window.getComputedStyle(origBlock).backgroundColor;
-        clonedBlocks[index].style.setProperty('background-color', computedBg, 'important');
+        clonedBlocks[index].style.setProperty("background-color", computedBg, "important");
       }
     });
 
-    const appStyles = Array.from(
-      document.querySelectorAll('style, link[rel="stylesheet"]')
-    )
-      .map(s => s.outerHTML)
-      .join('\n');
+    const appStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((s) => s.outerHTML)
+      .join("\n");
 
-    const iframe = document.createElement('iframe');
-
+    const iframe = document.createElement("iframe");
     Object.assign(iframe.style, {
-      position: 'fixed',
-      right: '0',
-      bottom: '0',
-      width: '0',
-      height: '0',
-      border: '0',
-      visibility: 'hidden'
+      position: "fixed",
+      right: "0",
+      bottom: "0",
+      width: "0",
+      height: "0",
+      border: "0",
+      visibility: "hidden"
     });
 
     document.body.appendChild(iframe);
@@ -1102,35 +1091,28 @@
     const clonedHeader = dayHeaderEl ? dayHeaderEl.cloneNode(true) : null;
 
     doc.open();
-
     doc.write(`
-  <!DOCTYPE html>
-  <html>
-  <head>
-  <title>${escapeHtml(activePlan)}-Schedule</title>
-  ${appStyles}
-  <link rel="stylesheet" href="pdf-print.css">
-  </head>
-
-  <body>
-  <div class="tss-pdf-container">
-    <div class="tss-pdf-header">
-      <h1>Weekly Schedule — ${escapeHtml(activePlan)}</h1>
-      <p>Generated: ${new Date().toLocaleDateString()}</p>
-    </div>
-  </div>
-  </body>
-  </html>
-  `);
-
+      <!DOCTYPE html>
+      <html>
+      <head>
+      <title>${escapeHtml(activePlan)}-Schedule</title>
+      ${appStyles}
+      <link rel="stylesheet" href="pdf-print.css">
+      </head>
+      <body>
+      <div class="tss-pdf-container">
+        <div class="tss-pdf-header">
+          <h1>Weekly Schedule — ${escapeHtml(activePlan)}</h1>
+          <p>Generated: ${new Date().toLocaleDateString()}</p>
+        </div>
+      </div>
+      </body>
+      </html>
+    `);
     doc.close();
 
-    const container = doc.querySelector('.tss-pdf-container');
-
-    if (clonedHeader) {
-      container.appendChild(clonedHeader);
-    }
-
+    const container = doc.querySelector(".tss-pdf-container");
+    if (clonedHeader) container.appendChild(clonedHeader);
     container.appendChild(clonedGrid);
 
     iframe.onload = async () => {
@@ -1150,33 +1132,31 @@
   }
 
   function setupExportControls() {
-    const headerEl = document.querySelector('.tss-sched-header');
-    if (!headerEl || document.getElementById('tss-sched-export-group')) return;
+    const headerEl = document.querySelector(".tss-sched-header");
+    if (!headerEl || document.getElementById("tss-sched-export-group")) return;
 
-    const exportGroup = document.createElement('div');
-    exportGroup.className = 'tss-export-group';
-    exportGroup.id = 'tss-sched-export-group';
-    exportGroup.style.display = 'flex';
-    exportGroup.style.alignItems = 'center';
-    exportGroup.style.gap = '8px';
+    const exportGroup = document.createElement("div");
+    exportGroup.className = "tss-export-group";
+    exportGroup.id = "tss-sched-export-group";
+    exportGroup.style.display = "flex";
+    exportGroup.style.alignItems = "center";
+    exportGroup.style.gap = "8px";
 
     exportGroup.innerHTML = `
       <div id="tss-palette-dropdown-root" style="position: relative; display: inline-block;">
         <button id="tss-palette-trigger" title="Select Color Theme" style="
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 4px;
           background: rgba(255, 255, 255, 0.1);
           border: 1px solid rgba(255, 255, 255, 0.2);
           color: #fff;
-          padding: 4px 8px;
+          padding: 4px 6px;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 12px;
         ">
-          <div id="tss-palette-preview" style="display: flex; width: 20px; height: 12px; border-radius: 2px; overflow: hidden;"></div>
-          <span style="font-size: 10px; margin-left: 2px;">${activePalette.name}</span>
-          <span style="font-size: 9px; opacity: 0.7;">▼</span>
+          <div id="tss-palette-preview" style="display: flex; width: 14px; height: 14px; border-radius: 2px; overflow: hidden;"></div>
+          <span style="font-size: 8px; opacity: 0.7;">▼</span>
         </button>
 
         <div id="tss-palette-menu" style="
@@ -1191,7 +1171,7 @@
           padding: 4px;
           z-index: 1000;
           box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-          width: 150px;
+          width: max-content;
         ">
         </div>
       </div>
@@ -1204,39 +1184,37 @@
       </button>
     `;
 
-    headerEl.querySelector('.tss-sched-header-controls').prepend(exportGroup);
+    headerEl.querySelector(".tss-sched-header-controls").prepend(exportGroup);
 
-    const menuEl = document.getElementById('tss-palette-menu');
-    const triggerEl = document.getElementById('tss-palette-trigger');
-    const previewEl = document.getElementById('tss-palette-preview');
-    const labelSpan = triggerEl.querySelector('span:nth-of-type(1)');
+    const menuEl = document.getElementById("tss-palette-menu");
+    const triggerEl = document.getElementById("tss-palette-trigger");
+    const previewEl = document.getElementById("tss-palette-preview");
 
     function updatePreview() {
       previewEl.style.background = activePalette.colors[0];
-      labelSpan.textContent = activePalette.name;
     }
 
     function renderMenuOptions() {
-      menuEl.innerHTML = PALETTES.map(p => `
+      menuEl.innerHTML = PALETTES.map(
+        (p) => `
         <div class="tss-palette-option" data-id="${p.id}" style="
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 6px 8px;
+          padding: 4px;
           border-radius: 4px;
           cursor: pointer;
-          background: ${p.id === activePalette.id ? 'rgba(255,255,255,0.15)' : 'transparent'};
+          background: ${p.id === activePalette.id ? "rgba(255,255,255,0.2)" : "transparent"};
           margin-bottom: 2px;
         ">
-          <div style="width: 14px; height: 14px; border-radius: 2px; background: ${p.colors[0]};"></div>
-          <span style="font-size: 11px; color: #fff; font-weight: 500;">${p.name}</span>
+          <div style="width: 16px; height: 16px; border-radius: 3px; background: ${p.colors[0]};"></div>
         </div>
-      `).join('');
+      `
+      ).join("");
 
-      menuEl.querySelectorAll('.tss-palette-option').forEach(opt => {
-        opt.addEventListener('click', (e) => {
-          const id = e.currentTarget.getAttribute('data-id');
-          const selected = PALETTES.find(p => p.id === id);
+      menuEl.querySelectorAll(".tss-palette-option").forEach((opt) => {
+        opt.addEventListener("click", (e) => {
+          const id = e.currentTarget.getAttribute("data-id");
+          const selected = PALETTES.find((p) => p.id === id);
           if (selected) {
             activePalette = selected;
             updatePreview();
@@ -1245,7 +1223,7 @@
             renderGrid();
             renderExamsList();
           }
-          menuEl.style.display = 'none';
+          menuEl.style.display = "none";
         });
       });
     }
@@ -1253,28 +1231,28 @@
     updatePreview();
     renderMenuOptions();
 
-    triggerEl.addEventListener('click', (e) => {
+    triggerEl.addEventListener("click", (e) => {
       e.stopPropagation();
-      const isVisible = menuEl.style.display === 'block';
-      menuEl.style.display = isVisible ? 'none' : 'block';
+      const isVisible = menuEl.style.display === "block";
+      menuEl.style.display = isVisible ? "none" : "block";
     });
 
-    document.addEventListener('click', () => {
-      menuEl.style.display = 'none';
+    document.addEventListener("click", () => {
+      menuEl.style.display = "none";
     });
 
-    document.getElementById('tss-export-ics').addEventListener('click', () => {
+    document.getElementById("tss-export-ics").addEventListener("click", () => {
       const selected = currentSelected();
-      const activeSections = Object.values(catalog).filter(sec => selected.has(sec.pkgId));
+      const activeSections = Object.values(catalog).filter((sec) => selected.has(sec.pkgId));
       if (activeSections.length === 0) {
-        alert('No classes selected in active schedule to export.');
+        alert("No classes selected in active schedule to export.");
         return;
       }
       const icsContent = generateICS(activeSections);
-      downloadFile(icsContent, `schedule-${activePlan.toLowerCase().replace(/\s+/g, '-')}.ics`, 'text/calendar;charset=utf-8;');
+      downloadFile(icsContent, `schedule-${activePlan.toLowerCase().replace(/\s+/g, "-")}.ics`, "text/calendar;charset=utf-8;");
     });
 
-    document.getElementById('tss-export-pdf').addEventListener('click', () => {
+    document.getElementById("tss-export-pdf").addEventListener("click", () => {
       exportCalendarToPDF();
     });
   }
@@ -1293,6 +1271,7 @@
   function boot() {
     loadPersisted(render);
   }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot, { once: true });
   } else {
