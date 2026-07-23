@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  // ---------- 1. Inject the page-context script that captures OData responses ----------
+  // ---------- 1. Inject the page-context script ----------
   function injectPageScript() {
     const s = document.createElement("script");
     s.src = chrome.runtime.getURL("inject.js");
@@ -16,11 +16,46 @@
     injectPageScript();
   }
 
-  // ---------- 2. State ----------
+  // ---------- 2. State & Palettes ----------
   const DAY_COLS = { M: 0, Tu: 1, W: 2, Th: 3, F: 4 };
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640 };
 
+  // Unified dark color palette options (navy, dark purple, deep slate, no red)
+  const PALETTES = [
+    {
+      id: 'navy',
+      name: 'Navy',
+      colors: ['rgb(38, 61, 102)']
+    },
+    {
+      id: 'purple',
+      name: 'Purple',
+      colors: ['#482d55']
+    },
+    {
+      id: 'charcoal',
+      name: 'Charcoal',
+      colors: ['#3b3b3b']
+    },
+    {
+      id: 'green',
+      name: 'Green',
+      colors: ['#1b3b2b']
+    },
+    {
+      id: 'magenta',
+      name: 'Magenta',
+      colors: ['#501e3b']
+    },
+    {
+      id: 'brown',
+      name: 'Brown',
+      colors: ['#411f04']
+    }
+  ];
+
+  let activePalette = PALETTES[0];
   let catalog = {}; // pkgId -> section object
   let plans = { "Plan A": [] }; // planName -> array of pkgIds
   let activePlan = "Plan A";
@@ -30,6 +65,11 @@
   let currentView = "schedule"; // "schedule", "help", or "exams"
 
   // ---------- 3. Helpers ----------
+  function colorForCourse(courseCode) {
+    // Returns the uniform single dark color from the active theme
+    return activePalette.colors[0];
+  }
+
   function escapeHtml(str) {
     return String(str == null ? "" : str).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -62,12 +102,10 @@
     const exams = [];
 
     for (const line of lines) {
-      // Check for Final Exam or Midterm Exam line
       const isFinal = /^Final Examination/i.test(line);
       const isMidterm = /^Midterm Examination/i.test(line) || /^Midterm/i.test(line);
 
       if (isFinal || isMidterm) {
-        // Matches lines like: Final Examination Mon 12/08/2026 8:00 AM - 10:59 AM @ CENTR 101
         const exMatch = line.match(/(?:Final Examination|Midterm Examination|Midterm)\s+([A-Za-z]+,\s*[A-Za-z]+\s+\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z]+\s+\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}:\d{2}\s?[AP]M)\s*-\s*(\d{1,2}:\d{2}\s?[AP]M)(?:\s+@?\s*(.+))?/i);
         
         if (exMatch) {
@@ -79,7 +117,6 @@
             raw: line,
           });
         } else {
-          // Fallback parsing if exact date/time format varies slightly
           exams.push({
             type: isFinal ? "Final" : "Midterm",
             date: "See schedule details",
@@ -112,16 +149,7 @@
     return { meetings, exams };
   }
 
-  function colorForCourse(courseCode) {
-    let hash = 0;
-    for (let i = 0; i < courseCode.length; i++) {
-      hash = courseCode.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = Math.abs(hash) % 360;
-    return `hsl(${hue}, 65%, 55%)`;
-  }
-
-  // ---------- 4. Ingest captured events into catalog ----------
+  // ---------- 4. Ingest captured events ----------
   function ingestEvents(events) {
     let changed = false;
     for (const ev of events) {
@@ -207,6 +235,7 @@
         tss_schedule_plans: plans,
         tss_schedule_active_plan: activePlan,
         tss_schedule_panel_state: panelState,
+        tss_schedule_palette: activePalette.id
       });
     } catch (e) {
       /* ignore extension reload errors */
@@ -222,6 +251,7 @@
           "tss_schedule_active_plan",
           "tss_schedule_panel_state",
           "tss_schedule_selected",
+          "tss_schedule_palette"
         ],
         (res) => {
           if (res.tss_schedule_catalog) catalog = res.tss_schedule_catalog;
@@ -238,6 +268,10 @@
           }
           if (res.tss_schedule_panel_state) {
             panelState = { ...DEFAULT_PANEL, ...res.tss_schedule_panel_state };
+          }
+          if (res.tss_schedule_palette) {
+            const found = PALETTES.find((p) => p.id === res.tss_schedule_palette);
+            if (found) activePalette = found;
           }
           cb && cb();
         }
@@ -346,7 +380,6 @@
 
     if (!bodyEl || !helpEl || !examsEl) return;
 
-    // Reset visibility
     bodyEl.style.display = "none";
     helpEl.style.display = "none";
     examsEl.style.display = "none";
@@ -508,7 +541,6 @@
       panelEl.classList.toggle("hidden", !panelOpen);
     });
 
-    // View Navigation Listeners
     wrap.querySelector("#tss-sched-help-btn").addEventListener("click", () => {
       currentView = currentView === "help" ? "schedule" : "help";
       renderView();
@@ -529,7 +561,6 @@
       renderView();
     });
 
-    // Exam Filter Dropdown Listener
     const filterSelect = wrap.querySelector("#tss-exam-filter-select");
     filterSelect.addEventListener("change", (e) => {
       activeExamFilter = e.target.value;
@@ -586,6 +617,8 @@
       persist();
       render();
     });
+
+    setupExportControls();
   }
 
   function renderPlanSelector() {
@@ -779,7 +812,8 @@
       }
       entries.forEach(({ sec, m, conflict }) => {
         const col = DAY_COLS[day];
-        const color = conflict ? "#d64545" : colorForCourse(sec.courseCode);
+        // Conflicts remain visually distinct in dark orange/amber rather than red
+        const color = conflict ? "#d12a00" : colorForCourse(sec.courseCode);
         const top = Math.max(0, (m.startMin - dynamicStartMin) * pxPerMin);
         const height = Math.max(20, (m.endMin - m.startMin) * pxPerMin);
         const method = m.method ? ` (${m.method})` : "";
@@ -1006,7 +1040,46 @@
     const exportGroup = document.createElement('div');
     exportGroup.className = 'tss-export-group';
     exportGroup.id = 'tss-sched-export-group';
+    exportGroup.style.display = 'flex';
+    exportGroup.style.alignItems = 'center';
+    exportGroup.style.gap = '8px';
+
     exportGroup.innerHTML = `
+      <div id="tss-palette-dropdown-root" style="position: relative; display: inline-block;">
+        <button id="tss-palette-trigger" title="Select Color Theme" style="
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          color: #fff;
+          padding: 4px 8px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        ">
+          <div id="tss-palette-preview" style="display: flex; width: 20px; height: 12px; border-radius: 2px; overflow: hidden;"></div>
+          <span style="font-size: 10px; margin-left: 2px;">${activePalette.name}</span>
+          <span style="font-size: 9px; opacity: 0.7;">▼</span>
+        </button>
+
+        <div id="tss-palette-menu" style="
+          display: none;
+          position: absolute;
+          top: 100%;
+          left: 0;
+          margin-top: 4px;
+          background: #1e1e2e;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 6px;
+          padding: 4px;
+          z-index: 1000;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+          width: 150px;
+        ">
+        </div>
+      </div>
+
       <button class="tss-header-btn" id="tss-export-ics" title="Export to Calendar (.ics)">
         📅 ICS
       </button>
@@ -1016,6 +1089,63 @@
     `;
 
     headerEl.querySelector('.tss-sched-header-controls').prepend(exportGroup);
+
+    const menuEl = document.getElementById('tss-palette-menu');
+    const triggerEl = document.getElementById('tss-palette-trigger');
+    const previewEl = document.getElementById('tss-palette-preview');
+    const labelSpan = triggerEl.querySelector('span:nth-of-type(1)');
+
+    function updatePreview() {
+      previewEl.style.background = activePalette.colors[0];
+      labelSpan.textContent = activePalette.name;
+    }
+
+    function renderMenuOptions() {
+      menuEl.innerHTML = PALETTES.map(p => `
+        <div class="tss-palette-option" data-id="${p.id}" style="
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 8px;
+          border-radius: 4px;
+          cursor: pointer;
+          background: ${p.id === activePalette.id ? 'rgba(255,255,255,0.15)' : 'transparent'};
+          margin-bottom: 2px;
+        ">
+          <div style="width: 14px; height: 14px; border-radius: 2px; background: ${p.colors[0]};"></div>
+          <span style="font-size: 11px; color: #fff; font-weight: 500;">${p.name}</span>
+        </div>
+      `).join('');
+
+      menuEl.querySelectorAll('.tss-palette-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+          const id = e.currentTarget.getAttribute('data-id');
+          const selected = PALETTES.find(p => p.id === id);
+          if (selected) {
+            activePalette = selected;
+            updatePreview();
+            renderMenuOptions();
+            persist();
+            renderGrid();
+            renderExamsList();
+          }
+          menuEl.style.display = 'none';
+        });
+      });
+    }
+
+    updatePreview();
+    renderMenuOptions();
+
+    triggerEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = menuEl.style.display === 'block';
+      menuEl.style.display = isVisible ? 'none' : 'block';
+    });
+
+    document.addEventListener('click', () => {
+      menuEl.style.display = 'none';
+    });
 
     document.getElementById('tss-export-ics').addEventListener('click', () => {
       const selected = currentSelected();
@@ -1037,7 +1167,6 @@
     if (!document.getElementById("tss-sched-ext-root")) {
       buildPanelSkeleton();
     }
-    setupExportControls();
     renderPlanSelector();
     renderList();
     renderGrid();
