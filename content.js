@@ -477,18 +477,33 @@
             const checked = selected.has(sec.pkgId) ? "checked" : "";
             const methods = Array.from(new Set(sec.meetings.map((m) => m.method))).join("/");
             const days = Array.from(new Set(sec.meetings.flatMap((m) => m.days))).join(",");
+            
+            // Extract primary instructor name (or default to 'Staff')
+            const instructor = sec.meetings.find((m) => m.instructor)?.instructor || "Staff";
+
             const notesHtml = (sec.notes || [])
               .map((n) => `<span class="tss-sched-row-note">${escapeHtml(n)}</span>`)
               .join("");
+
             return `
-              <label class="tss-sched-row">
-                <input type="checkbox" data-pkg="${escapeHtml(sec.pkgId)}" ${checked} />
-                <span class="tss-sched-row-main">
-                  <strong>${escapeHtml(sec.label)}</strong>
-                  <span class="tss-sched-row-sub">${escapeHtml(methods)} · ${escapeHtml(days || "TBA")} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
-                  ${notesHtml}
-                </span>
-              </label>
+              <div class="tss-sched-row-container" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                <label class="tss-sched-row" style="flex: 1;">
+                  <input type="checkbox" data-pkg="${escapeHtml(sec.pkgId)}" ${checked} />
+                  <span class="tss-sched-row-main">
+                    <strong>${escapeHtml(sec.label)}</strong>
+                    <span class="tss-sched-row-sub">${escapeHtml(methods)} · ${escapeHtml(days || "TBA")} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
+                    ${notesHtml}
+                  </span>
+                </label>
+                <button 
+                  class="tss-sched-rmp-btn" 
+                  data-instructor="${escapeHtml(instructor)}" 
+                  title="Search RateMyProfessors for ${escapeHtml(instructor)}"
+                  style="padding: 2px 6px; font-size: 11px; font-weight: bold; border-radius: 4px; cursor: pointer;"
+                >
+                  RMP
+                </button>
+              </div>
             `;
           })
           .join("");
@@ -531,6 +546,25 @@
         });
         persist();
         render();
+      });
+    });
+
+    // Attach listeners for RMP buttons inside renderList()
+    listEl.querySelectorAll(".tss-sched-rmp-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const instructorName = e.currentTarget.getAttribute("data-instructor");
+
+        if (!instructorName || instructorName === "Staff") {
+          alert("No instructor assigned for this section yet.");
+          return;
+        }
+
+        // Direct search link targeting UC San Diego on RateMyProfessors
+        const searchQuery = encodeURIComponent(`${instructorName} UC San Diego`);
+        const rmpUrl = `https://www.ratemyprofessors.com/search/professors?q=${searchQuery}`;
+
+        window.open(rmpUrl, "_blank", "noopener,noreferrer");
       });
     });
   }
