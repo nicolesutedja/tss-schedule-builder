@@ -290,6 +290,26 @@
     });
   }
 
+  let currentView = "schedule"; // "schedule" or "help"
+
+  function renderView() {
+    const bodyEl = document.querySelector(".tss-sched-body");
+    const helpEl = document.getElementById("tss-sched-help-view");
+    const helpBtn = document.getElementById("tss-sched-help-btn");
+
+    if (!bodyEl || !helpEl) return;
+
+    if (currentView === "help") {
+      bodyEl.style.display = "none";
+      helpEl.style.display = "flex";
+      if (helpBtn) helpBtn.classList.add("active");
+    } else {
+      bodyEl.style.display = "flex";
+      helpEl.style.display = "none";
+      if (helpBtn) helpBtn.classList.remove("active");
+    }
+  }
+
   function buildPanelSkeleton() {
     const wrap = document.createElement("div");
     wrap.id = "tss-sched-ext-root";
@@ -305,6 +325,7 @@
             <button id="tss-sched-plan-new" title="New plan">+</button>
             <button id="tss-sched-plan-rename" title="Rename plan">✎</button>
             <button id="tss-sched-plan-delete" title="Delete plan">🗑</button>
+            <button id="tss-sched-help-btn" title="How to use TritonSched">?</button>
             <button id="tss-sched-close" title="Close">✕</button>
           </div>
         </div>
@@ -312,29 +333,76 @@
           <div id="tss-sched-list" class="tss-sched-list"></div>
           <div id="tss-sched-grid" class="tss-sched-grid"></div>
         </div>
+        <div id="tss-sched-help-view" class="tss-sched-help-container" style="display: none;">
+          <div class="tss-help-content">
+            <h2>How to Use TritonSched</h2>
+            <div class="tss-help-steps">
+              <div class="tss-help-step">
+                <div>
+                  <strong>1. Browse Classes in TSS</strong>
+                  <p>Open any course section tab inside Schedule of Classes in the Triton Student System. The extension automatically detects and loads class details into your left sidebar list.</p>
+                </div>
+              </div>
+              <div class="tss-help-step">
+                <div>
+                  <strong>2. Build Your Schedule</strong>
+                  <p>Check or uncheck section boxes to add or remove classes from your visual weekly grid view.</p>
+                </div>
+              </div>
+              <div class="tss-help-step">
+                <div>
+                  <strong>3. Manage Multiple Plans</strong>
+                  <p>Use the top dropdown to switch plans or click <strong>+</strong> to create alternate schedule variations.</p>
+                </div>
+              </div>
+              <div class="tss-help-step">
+                <div>
+                  <strong>4. Export Your Schedule</strong>
+                  <p>Click <strong>📅 ICS</strong> to sync events with Google Calendar/Apple Calendar, or <strong>📄 PDF</strong> to generate a printable sheet.</p>
+                </div>
+              </div>
+            </div>
+            <button id="tss-sched-return-btn" class="tss-primary-btn">← Return to Scheduler</button>
+          </div>
+        </div>
         <div id="tss-sched-resize-handle" title="Drag to resize"></div>
       </div>
     `;
     document.body.appendChild(wrap);
 
+    const toggleBtn = wrap.querySelector("#tss-sched-toggle");
     const panelEl = wrap.querySelector("#tss-sched-panel");
+
     applyPanelGeometry(panelEl);
     makeDraggable(panelEl, wrap.querySelector("#tss-sched-drag-handle"));
     makeResizable(panelEl, wrap.querySelector("#tss-sched-resize-handle"));
-
-    wrap.querySelector("#tss-sched-toggle").addEventListener("click", () => {
+    toggleBtn.addEventListener("click", () => {
       panelOpen = !panelOpen;
       panelEl.classList.toggle("hidden", !panelOpen);
     });
+
+    // Help Toggle Buttons
+    wrap.querySelector("#tss-sched-help-btn").addEventListener("click", () => {
+      currentView = currentView === "help" ? "schedule" : "help";
+      renderView();
+    });
+
+    wrap.querySelector("#tss-sched-return-btn").addEventListener("click", () => {
+      currentView = "schedule";
+      renderView();
+    });
+
     wrap.querySelector("#tss-sched-close").addEventListener("click", () => {
       panelOpen = false;
       panelEl.classList.add("hidden");
     });
+
     wrap.querySelector("#tss-sched-plan-select").addEventListener("change", (e) => {
       activePlan = e.target.value;
       persist();
       render();
     });
+
     wrap.querySelector("#tss-sched-plan-new").addEventListener("click", () => {
       const name = prompt("Name this new schedule plan:", `Plan ${Object.keys(plans).length + 1}`);
       if (!name) return;
@@ -347,6 +415,7 @@
       persist();
       render();
     });
+
     wrap.querySelector("#tss-sched-plan-rename").addEventListener("click", () => {
       const name = prompt("Rename current plan:", activePlan);
       if (!name || name === activePlan) return;
@@ -360,6 +429,7 @@
       persist();
       render();
     });
+
     wrap.querySelector("#tss-sched-plan-delete").addEventListener("click", () => {
       const names = Object.keys(plans);
       if (names.length <= 1) {
@@ -395,7 +465,7 @@
 
     const courseCodes = Object.keys(byCourse).sort();
     if (courseCodes.length === 0) {
-      listEl.innerHTML = `<p class="tss-sched-empty">Open a course's "Class Sections" tab in TSS to see it here.</p>`;
+      listEl.innerHTML = `<p class="tss-sched-empty">Open any course in TSS schedule of classes to see it here.</p>`;
       return;
     }
 
@@ -801,6 +871,7 @@
     renderPlanSelector();
     renderList();
     renderGrid();
+    renderView();
   }
 
   // ---------- 9. Boot ----------

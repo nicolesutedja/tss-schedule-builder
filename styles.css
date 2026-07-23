@@ -313,3 +313,8 @@
     object-fit: contain;
     vertical-align: middle;
   }
+
+  .tss-help-content {
+    padding: 0px 24px 24px 32px; /* Top, Right, Bottom, Left */
+    box-sizing: border-box;
+  }
