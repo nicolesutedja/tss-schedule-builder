@@ -1,7 +1,9 @@
 (function () {
   "use strict";
 
-  // ---------- 1. Inject Page Script ----------
+  /* ==========================================================================
+     1. INJECT PAGE SCRIPT
+     ========================================================================== */
   function injectPageScript() {
     const s = document.createElement("script");
     s.src = chrome.runtime.getURL("inject.js");
@@ -17,7 +19,9 @@
     injectPageScript();
   }
 
-// ---------- 2. State & Palettes ----------
+  /* ==========================================================================
+     2. STATE & PALETTES
+     ========================================================================== */
   const DAY_COLS = { M: 0, Tu: 1, W: 2, Th: 3, F: 4 };
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640 };
@@ -39,7 +43,13 @@
   let activeExamFilter = "ALL";
   let currentView = "schedule";
 
-  // ---------- 3. Helpers ----------
+  let stateLoaded = false;
+  let isInitializing = true; // Prevent saving until storage load finishes
+  let pendingEventBatches = [];
+
+  /* ==========================================================================
+     3. HELPERS
+     ========================================================================== */
   function colorForCourse(courseCode) {
     return activePalette.colors[0];
   }
@@ -128,8 +138,11 @@
     return { meetings, exams };
   }
 
-  // ---------- 4. Event Ingestion ----------
+  /* ==========================================================================
+     4. EVENT INGESTION
+     ========================================================================== */
   function ingestEvents(events) {
+    if (!events || !Array.isArray(events)) return;
     let changed = false;
 
     for (const ev of events) {
@@ -158,6 +171,8 @@
       const section = catalog[pkgId];
       if (!section.notes) section.notes = [];
       if (!section.exams) section.exams = [];
+      if (!section.meetings) section.meetings = [];
+
       section.seatsAvailable = ev.EventPkgSeatsAvailable;
       section.seatsLimit = ev.EventPkgLimit;
       section.waitlist = ev.EventPkgNumOnWaitl;
@@ -209,8 +224,13 @@
     }
   }
 
-  // ---------- 5. Persistence ----------
+  /* ==========================================================================
+     5. PERSISTENCE
+     ========================================================================== */
   function persist() {
+    // Block saving during state initialization to avoid writing default state over storage
+    if (isInitializing) return;
+
     try {
       chrome.storage.local.set({
         tss_schedule_catalog: catalog,
@@ -219,7 +239,9 @@
         tss_schedule_panel_state: panelState,
         tss_schedule_palette: activePalette.id
       });
-    } catch (e) {}
+    } catch (e) {
+      console.warn("TritonSched: Failed to persist storage.", e);
+    }
   }
 
   function loadPersisted(cb) {
@@ -253,23 +275,45 @@
             const found = PALETTES.find((p) => p.id === res.tss_schedule_palette);
             if (found) activePalette = found;
           }
+
+          // Mark initialization finished before processing queue
+          stateLoaded = true;
+          isInitializing = false;
+
+          if (pendingEventBatches.length) {
+            const queued = pendingEventBatches;
+            pendingEventBatches = [];
+            queued.forEach((batch) => ingestEvents(batch));
+          }
+
           cb && cb();
         }
       );
     } catch (e) {
+      stateLoaded = true;
+      isInitializing = false;
       cb && cb();
     }
   }
 
-  // ---------- 6. Message Listener ----------
+  /* ==========================================================================
+     6. MESSAGE LISTENER
+     ========================================================================== */
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     const msg = event.data;
     if (!msg || msg.source !== "tss-schedule-ext" || msg.type !== "events") return;
+    
+    if (!stateLoaded) {
+      pendingEventBatches.push(msg.payload);
+      return;
+    }
     ingestEvents(msg.payload);
   });
 
-  // ---------- 7. UI Helpers ----------
+  /* ==========================================================================
+     7. UI HELPERS & RENDERING
+     ========================================================================== */
   function applyPanelGeometry(panelEl) {
     panelEl.style.top = panelState.top + "px";
     if (panelState.left != null) {
@@ -397,32 +441,39 @@
     }
   }
 
-  function renderExamsList() {
-    const listContainer = document.getElementById("tss-sched-exams-list");
-    if (!listContainer) return;
-
+  function getFoundExams() {
     const selectedPkgIds = currentSelected();
     const selectedSections = Array.from(selectedPkgIds)
       .map((id) => catalog[id])
       .filter(Boolean);
 
-    if (selectedSections.length === 0) {
+    const examItems = [];
+    selectedSections.forEach((sec) => {
+      (sec.exams || []).forEach((ex) => {
+        examItems.push({
+          courseCode: sec.courseCode,
+          label: sec.label,
+          ...ex
+        });
+      });
+    });
+    return examItems;
+  }
+
+  function renderExamsList() {
+    const listContainer = document.getElementById("tss-sched-exams-list");
+    if (!listContainer) return;
+
+    const selectedPkgIds = currentSelected();
+
+    if (selectedPkgIds.size === 0) {
       listContainer.innerHTML = `<p class="tss-sched-empty">No classes selected. Select classes from your schedule list to view their exam details.</p>`;
       return;
     }
 
-    let examItems = [];
-    selectedSections.forEach((sec) => {
-      (sec.exams || []).forEach((ex) => {
-        if (activeExamFilter === "ALL" || ex.type === activeExamFilter) {
-          examItems.push({
-            courseCode: sec.courseCode,
-            label: sec.label,
-            ...ex
-          });
-        }
-      });
-    });
+    const examItems = getFoundExams().filter(
+      (ex) => activeExamFilter === "ALL" || ex.type === activeExamFilter
+    );
 
     if (examItems.length === 0) {
       const filterLabel = activeExamFilter === "ALL" ? "" : activeExamFilter.toLowerCase() + " ";
@@ -481,15 +532,34 @@
               <h2 style="margin: 0; color: #111827;">Exam Schedule</h2>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <label for="tss-exam-filter-select" style="font-size: 13px; color: #374151; font-weight: 500;">Filter:</label>
-                <select id="tss-exam-filter-select" style="padding: 6px 10px; border-radius: 6px; background: #ffffff; color: #1f2937; border: 1px solid #d1d5db; font-size: 13px; cursor: pointer; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <select id="tss-exam-filter-select" style="padding: 6px 10px; border-radius: 6px; background: #ffffff; color: #1f2937; border: 1px solid #d1d5db; font-size: 13px; cursor: pointer; outline: none;">
                   <option value="ALL">All Exams</option>
                   <option value="Final">Finals</option>
                   <option value="Midterm">Midterms</option>
                 </select>
               </div>
             </div>
-            <div id="tss-sched-exams-list" style="max-height: 380px; overflow-y: auto; padding-right: 4px;"></div>
-            <button id="tss-sched-exams-return-btn" class="tss-primary-btn" style="margin-top: 16px;">← Return to Scheduler</button>
+
+            <div id="tss-sched-exams-list" style="max-height: 340px; overflow-y: auto; padding-right: 4px;"></div>
+
+            <!-- ACTION BUTTONS -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+              <button 
+                id="tss-sched-export-exams-ics" 
+                class="tss-primary-btn" 
+                style="width: 100%; background: #1B263B; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; box-sizing: border-box;"
+              >
+                📅 Export to Calendar (.ics)
+              </button>
+              
+              <button 
+                id="tss-sched-exams-return-btn" 
+                class="tss-primary-btn" 
+                style="width: 100%; box-sizing: border-box;"
+              >
+                ← Return to Scheduler
+              </button>
+            </div>
           </div>
         </div>
 
@@ -626,6 +696,38 @@
     wrap.querySelector("#tss-sched-about-return-btn").addEventListener("click", () => {
       currentView = "schedule";
       renderView();
+    });
+
+    wrap.querySelector("#tss-sched-export-exams-ics").addEventListener("click", () => {
+      const currentExams = getFoundExams();
+
+      if (!currentExams || currentExams.length === 0) {
+        alert("No exams found to export!");
+        return;
+      }
+
+      const filteredExams = currentExams.filter((exam) => {
+        if (activeExamFilter === "ALL") return true;
+        return exam.type === activeExamFilter;
+      });
+
+      if (filteredExams.length === 0) {
+        alert(`No ${activeExamFilter} exams available to export.`);
+        return;
+      }
+
+      const { ics, exportedCount, skippedCount } = generateExamsICS(filteredExams);
+
+      if (exportedCount === 0) {
+        alert("None of these exams have a posted date/time yet, so there's nothing to export.");
+        return;
+      }
+
+      downloadFile(ics, `${activePlan.toLowerCase().replace(/\s+/g, "-")}-exams.ics`, "text/calendar;charset=utf-8;");
+
+      if (skippedCount > 0) {
+        alert(`${skippedCount} exam(s) don't have a posted date/time yet and were skipped.`);
+      }
     });
 
     const feedbackSubmitBtn = wrap.querySelector("#tss-feedback-submit-btn");
@@ -963,7 +1065,9 @@
     `;
   }
 
-  // ---------- 8. Export Helpers ----------
+  /* ==========================================================================
+     8. EXPORT HELPERS
+     ========================================================================== */
   function generateICS(selectedSections) {
     const lines = [
       "BEGIN:VCALENDAR",
@@ -1050,6 +1154,67 @@
     }, 100);
   }
 
+  function parseExamDateTime(dateStr, timeStr) {
+    const dateMatch = dateStr && dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!dateMatch) return null;
+
+    const month = parseInt(dateMatch[1], 10) - 1;
+    const day = parseInt(dateMatch[2], 10);
+    const year = parseInt(dateMatch[3], 10);
+
+    const [startStr, endStr] = String(timeStr || "").split("-").map((s) => s.trim());
+    const startMin = startStr ? parseTimeToMinutes(startStr) : null;
+    const endMin = endStr ? parseTimeToMinutes(endStr) : null;
+    if (startMin == null || endMin == null) return null;
+
+    const start = new Date(year, month, day, Math.floor(startMin / 60), startMin % 60);
+    const end = new Date(year, month, day, Math.floor(endMin / 60), endMin % 60);
+    return { start, end };
+  }
+
+  function generateExamsICS(examsList) {
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//TritonSched//Exam Calendar//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH"
+    ];
+
+    function pad(n) {
+      return String(n).padStart(2, "0");
+    }
+    function formatLocal(date) {
+      return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}T${pad(date.getHours())}${pad(date.getMinutes())}00`;
+    }
+
+    const nowStamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    let exportedCount = 0;
+    let skippedCount = 0;
+
+    examsList.forEach((exam, idx) => {
+      const parsed = parseExamDateTime(exam.date, exam.time);
+      if (!parsed) {
+        skippedCount++;
+        return;
+      }
+
+      exportedCount++;
+      lines.push("BEGIN:VEVENT");
+      lines.push(`UID:exam-${idx}-${Date.now()}@tss-helper`);
+      lines.push(`DTSTAMP:${nowStamp}`);
+      lines.push(`DTSTART:${formatLocal(parsed.start)}`);
+      lines.push(`DTEND:${formatLocal(parsed.end)}`);
+      lines.push(`SUMMARY:${exam.courseCode ? exam.courseCode + " " : ""}${exam.type || "Exam"}`);
+      lines.push(`LOCATION:${exam.location || "TBA"}`);
+      lines.push(`DESCRIPTION:${exam.label || exam.courseCode || "Exam"}`);
+      lines.push("END:VEVENT");
+    });
+
+    lines.push("END:VCALENDAR");
+    return { ics: lines.join("\r\n"), exportedCount, skippedCount };
+  }
+
   function exportCalendarToPDF() {
     const gridEl = document.querySelector(".tss-sched-grid-scroll");
     const dayHeaderEl = document.querySelector(".tss-sched-daycols-header");
@@ -1070,12 +1235,6 @@
       }
     });
 
-    // Self-contained print styles. We deliberately do NOT pull in the host
-    // page's own <style>/<link> tags (previous approach) — that grabbed
-    // whichever stylesheets happened to be in the surrounding page's DOM
-    // (which could hide our elements via their own print rules) while
-    // never including our real styles.css, since content-script CSS isn't
-    // inserted as a DOM node. Everything the printout needs is defined here.
     const printStyles = `
       * {
         box-sizing: border-box;
@@ -1210,14 +1369,8 @@
     scaleWrap.appendChild(clonedGrid);
     container.appendChild(scaleWrap);
 
-    // Shrink the whole calendar to fit within one printed portrait page.
-    // The on-screen grid height is sized for a scrollable panel and can
-    // easily be taller than a single page, which is what pushed the bottom
-    // rows onto a second sheet. We use `zoom` (not `transform: scale`)
-    // because it affects layout size directly, so the page-break
-    // calculation sees the smaller height instead of the original one.
     const originalGridHeight = parseFloat(gridEl.style.height) || gridEl.getBoundingClientRect().height;
-    const PAGE_BUDGET_PX = 780; // usable height left for the grid on a portrait page after margins + our header
+    const PAGE_BUDGET_PX = 780;
     if (originalGridHeight > PAGE_BUDGET_PX) {
       const zoomFactor = Math.max(0.45, PAGE_BUDGET_PX / originalGridHeight);
       scaleWrap.style.zoom = zoomFactor;
@@ -1357,7 +1510,7 @@
         return;
       }
       const icsContent = generateICS(activeSections);
-      downloadFile(icsContent, `schedule-${activePlan.toLowerCase().replace(/\s+/g, "-")}.ics`, "text/calendar;charset=utf-8;");
+      downloadFile(icsContent, `${activePlan.toLowerCase().replace(/\s+/g, "-")}-schedule.ics`, "text/calendar;charset=utf-8;");
     });
 
     document.getElementById("tss-export-pdf").addEventListener("click", () => {
@@ -1375,7 +1528,9 @@
     renderView();
   }
 
-  // ---------- 9. Boot ----------
+  /* ==========================================================================
+     9. BOOTSTRAP
+     ========================================================================== */
   function boot() {
     loadPersisted(render);
   }
