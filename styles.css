@@ -278,3 +278,27 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
+
+.tss-sched-grid-scroll {
+  position: relative;
+  margin-left: 46px;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+
+  /* 1. Horizontal hour lines & Vertical day lines */
+  background-image: 
+    /* Horizontal hourly lines */
+    linear-gradient(to bottom, #e8e8e8 1px, transparent 1px),
+    /* Vertical day column separators (5 equal sections) */
+    linear-gradient(to right, 
+      transparent 20%, #ececec 20%, #ececec calc(20% + 1px), transparent calc(20% + 1px),
+      transparent 40%, #ececec 40%, #ececec calc(40% + 1px), transparent calc(40% + 1px),
+      transparent 60%, #ececec 60%, #ececec calc(60% + 1px), transparent calc(60% + 1px),
+      transparent 80%, #ececec 80%, #ececec calc(80% + 1px), transparent calc(80% + 1px)
+    );
+
+  /* 2. Set horizontal grid line height dynamically */
+  background-size: 100% var(--hour-height, 60px), 100% 100%;
+  background-repeat: repeat-y, no-repeat;
+}

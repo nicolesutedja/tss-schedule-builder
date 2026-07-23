@@ -308,8 +308,6 @@
             <button id="tss-sched-plan-new" title="New plan">+</button>
             <button id="tss-sched-plan-rename" title="Rename plan">✎</button>
             <button id="tss-sched-plan-delete" title="Delete plan">🗑</button>
-            <button id="tss-sched-clear" title="Clear this plan's selections">Clear</button>
-            <button id="tss-sched-minimize" title="Minimize">–</button>
             <button id="tss-sched-close" title="Close">✕</button>
           </div>
         </div>
@@ -334,16 +332,6 @@
     wrap.querySelector("#tss-sched-close").addEventListener("click", () => {
       panelOpen = false;
       panelEl.classList.add("hidden");
-    });
-    wrap.querySelector("#tss-sched-minimize").addEventListener("click", () => {
-      panelState.collapsed = !panelState.collapsed;
-      panelEl.classList.toggle("collapsed", panelState.collapsed);
-      persist();
-    });
-    wrap.querySelector("#tss-sched-clear").addEventListener("click", () => {
-      setSelected(new Set());
-      persist();
-      render();
     });
     wrap.querySelector("#tss-sched-plan-select").addEventListener("change", (e) => {
       activePlan = e.target.value;
@@ -602,8 +590,7 @@
 
     gridEl.innerHTML = `
       <div class="tss-sched-daycols-header">${dayCols}</div>
-      <div class="tss-sched-grid-scroll" style="height:${gridHeight}px">
-        <div class="tss-sched-hours">${hourLabels}</div>
+      <div class="tss-sched-grid-scroll" style="height:${gridHeight}px; --hour-height:${60 * pxPerMin}px;"> <div class="tss-sched-hours">${hourLabels}</div>
         <div class="tss-sched-columns">${blocks}</div>
       </div>
       ${conflictPairs.length ? `<div class="tss-sched-conflict-note">⚠ ${conflictPairs.map(escapeHtml).join("<br>⚠ ")}</div>` : ""}
