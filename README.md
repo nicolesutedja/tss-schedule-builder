@@ -1,64 +1,59 @@
-# 📅 TSS Schedule Builder
+<p align="center">
+  <img src="public/logo.png" alt="TritonSched Logo" width="120">
+</p>
 
-Rebuilds a **Monday–Friday weekly calendar view** for UCSD's Triton Student System (TSS), restoring the visual schedule planning experience previously available in WebReg.
+<h1 align="center">TritonSched 1.0.0</h1>
+
+<p align="center">
+  Calendar schedule builder and planning tool for UC San Diego students using TSS.
+</p>
 
 ---
 
-## ✨ Features
+**TritonSched** is a browser extension built to help with course planning and schedule visualization for UC San Diego students using the **Triton Student System (TSS).** 
 
-- 📡 **Automatic OData Interception**
-  - Captures course and section information from the `YUCSD_CON_EVENTS` and `_sections` endpoints as you browse TSS.
+Inspired by WebReg's old Calendar view, I built **TritonSched** to give students a similar clean, weekly calendar interface, with conflict checking, RMP instructor lookups, and multiple plan views, all inside of TSS itself. It is currently still in development and I'm still making active updates. If you encounter bugs or you have feature ideas, feel free to send feedback directly in the extension in the information (i) section. 
 
-- 📅 **Weekly Schedule Grid**
-  - Displays selected class sections on a clean Monday–Friday calendar.
+Developed by **Nicole Sutedja.**
 
-- ⚠️ **Conflict Detection**
-  - Automatically highlights overlapping classes in red and warns about scheduling conflicts.
+---
 
-- 📂 **Multiple Schedule Plans**
-  - Create, rename, delete, and switch between multiple schedule drafts (e.g. *Plan A*, *Plan B*).
+## ✨ Key Features
 
-- 🖱️ **Draggable & Resizable Window**
-  - Move or resize the floating schedule planner anywhere on the page.
-
-- 💾 **Persistent Storage**
-  - Saves course data, schedule plans, and UI preferences using `chrome.storage.local`.
+- **Automated Network Interception:** Intercepts and normalizes live OData responses as you browse TSS courses.
+- **Dynamic Weekly Calendar Matrix:** Displays enrollment sections on a Monday–Friday grid with dynamic time scaling based on early or late course meetings.
+- **Color Customization:** Choose the color you'd like the course blocks to be.
+- **iCalendar (.ics) & PDF Export:** Export complete quarterly schedules or final exam dates directly to your calendar or as a PDF.
+- **Real-Time Conflict Detection:** Identifies and highlights overlapping classes and final exam collisions with visual alert indicators.
+- **Multi-Plan Management:** Draft, rename, compare, and switch between multiple schedule options (e.g., Plan A, Plan B).
+- **Floating & Resizable Panel:** Provides a fully draggable and resizable overlay window that complements the native TSS interface.
+- **Integrated Rate My Professor:** Easily check the ratings of a professor as you plan your classes.
 
 ---
 
 ## 🛠 Tech Stack
 
-Built using modern Chrome Extension tooling.
-
-| Technology | Purpose |
-|------------|---------|
-| Vite | Development server & build tool |
-| @crxjs/vite-plugin | Chrome Extension integration |
-| Manifest V3 | Chrome Extension framework |
-| JavaScript (ES Modules) | Application logic |
-| HTML & CSS | User interface |
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| Bundler | Vite | High-performance frontend build engine |
+| Extension Tooling | `@crxjs/vite-plugin` | Manifest V3 HMR integration |
+| Platform | Chrome Extension API | Manifest V3 standards |
+| Core Logic | Vanilla JavaScript (ES Modules) | Lightweight DOM manipulation and state management |
+| Styling | Modular CSS3 | Custom scoped theme engine |
 
 ---
 
-# 🚀 Getting Started
+# 🚀 Installation & Setup
 
 ## For Users
 
-If you only want to use the extension:
-
-1. Clone or download this repository.
-2. Open Chrome and navigate to:
-
-   ```
-   chrome://extensions/
-   ```
-
+1. Download the latest release or clone this repository.
+2. Open Chrome and navigate to `chrome://extensions/`.
 3. Enable **Developer Mode**.
 4. Click **Load unpacked**.
-5. Select the project folder (or the `dist/` folder if using a production build).
-6. Visit **https://tss.ucsd.edu**.
-7. Open any course's **Class Sections** page.
-8. Click the floating **📅 Schedule** button to begin planning.
+5. Select the `dist/` directory (or the project folder if applicable).
+6. Navigate to **https://tss.ucsd.edu**.
+7. Click the floating **📅 Schedule** launcher in the bottom corner.
 
 ---
 
@@ -66,8 +61,8 @@ If you only want to use the extension:
 
 ### Prerequisites
 
-- Node.js **v18+**
-- npm
+- Node.js **18+**
+- npm **9+**
 
 ### 1. Clone the Repository
 
@@ -82,87 +77,26 @@ cd tss-schedule-builder
 npm install
 ```
 
-### 3. Start Development Mode
+### 3. Start Development Server
+
+Runs Vite with file watching and Hot Module Replacement (HMR).
 
 ```bash
 npm run dev
 ```
 
-Vite and CRXJS will:
-
-- build the extension
-- watch for file changes
-- output to the `dist/` folder
-- enable Hot Module Replacement (HMR)
-
 ### 4. Load the Extension
 
-Open:
+1. Open `chrome://extensions/`
+2. Enable **Developer Mode**
+3. Click **Load unpacked**
+4. Select the generated `dist/` directory
+5. Open **https://tss.ucsd.edu**
 
-```
-chrome://extensions/
-```
-
-Then:
-
-1. Enable **Developer Mode**
-2. Click **Load unpacked**
-3. Select the generated `dist/` folder
-
-After loading the development build:
-
-- Edit files such as:
-  - `content.js`
-  - `inject.js`
-  - `styles.css`
-
-Changes will automatically rebuild and reload the extension.
-
-In most cases, you won't need to reload the extension from `chrome://extensions/`, allowing you to keep your current TSS session while developing.
+Changes made inside `src/` will automatically trigger a rebuild and extension reload.
 
 ---
 
-## 📦 Production Build
+## 📄 License
 
-To generate an optimized production build:
-
-```bash
-npm run build
-```
-
-The compiled extension will be available in:
-
-```
-dist/
-```
-
-This folder is ready to distribute, zip, or publish.
-
----
-
-## 📁 Project Structure
-
-```text
-tss-schedule-builder/
-├── src/
-│   ├── content.js
-│   ├── inject.js
-│   ├── styles.css
-│   └── ...
-├── public/
-├── dist/
-├── manifest.json
-├── package.json
-└── README.md
-```
-
----
-
-## 💡 Future Improvements
-
-- Import/export schedule plans
-- Color customization
-- Dark mode
-- Calendar (.ics) export
-- Better conflict visualization
-- Support for additional TSS views
+This project is licensed under the MIT License. See the `LICENSE` file for details.

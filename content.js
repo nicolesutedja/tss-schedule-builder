@@ -507,7 +507,7 @@
         </button>      
         <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
-          <span>TritonSched 1.0.0 (BETA)</span>
+          <span>TritonSched 1.0.0</span>
           <div class="tss-sched-header-controls">
             <select id="tss-sched-plan-select" title="Switch schedule plan"></select>
             <button id="tss-sched-plan-new" title="New plan">+</button>
@@ -575,7 +575,7 @@
             <h3 style="font-size: 14px; color: #1f2937; margin-top: 16px;">Purpose</h3>
             <p style="font-size: 13px; color: #374151; line-height: 1.5;">
               Inspired by WebReg's old Calendar view, I built TritonSched to give students a similar clean, weekly calendar interface, with conflict checking, RMP instructor lookups, and multiple plan views, all inside of TSS itself.
-              It is currently still in Beta and I'm still making active updates. If you encounter bugs or you have feature ideas, feel free to send feedback below. 
+              It is currently still in development and I'm still making active updates. If you encounter bugs or you have feature ideas, feel free to send feedback below. 
             </p>
 
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
