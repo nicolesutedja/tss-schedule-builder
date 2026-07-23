@@ -3,19 +3,31 @@
   "name": "TSS Schedule Builder",
   "version": "0.1.0",
   "description": "Rebuilds the Mon-Fri weekly calendar view for UCSD's Triton Student System (TSS) course search.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://tss.ucsd.edu/*"],
-      "js": ["content.js"],
-      "css": ["styles.css"],
+      "matches": [
+        "https://tss.ucsd.edu/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["inject.js"],
-      "matches": ["https://tss.ucsd.edu/*"]
+      "resources": [
+        "inject.js"
+      ],
+      "matches": [
+        "https://tss.ucsd.edu/*"
+      ]
     }
   ]
 }
