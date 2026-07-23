@@ -398,61 +398,93 @@
   }
 
   function renderList() {
-    const listEl = document.getElementById("tss-sched-list");
-    if (!listEl) return;
-    const selected = currentSelected();
+      const listEl = document.getElementById("tss-sched-list");
+      if (!listEl) return;
+      const selected = currentSelected();
 
-    const byCourse = {};
-    Object.values(catalog).forEach((sec) => {
-      if (!byCourse[sec.courseCode]) byCourse[sec.courseCode] = [];
-      byCourse[sec.courseCode].push(sec);
-    });
-
-    const courseCodes = Object.keys(byCourse).sort();
-    if (courseCodes.length === 0) {
-      listEl.innerHTML = `<p class="tss-sched-empty">Open a course's "Class Sections" tab in TSS to see it here. (You don't need to click "Go To Booking" — just viewing sections is enough.)</p>`;
-      return;
-    }
-
-    listEl.innerHTML = courseCodes
-      .map((code) => {
-        const sections = byCourse[code].sort((a, b) => a.label.localeCompare(b.label));
-        const rows = sections
-          .map((sec) => {
-            const checked = selected.has(sec.pkgId) ? "checked" : "";
-            const methods = Array.from(new Set(sec.meetings.map((m) => m.method))).join("/");
-            const days = Array.from(new Set(sec.meetings.flatMap((m) => m.days))).join(",");
-            const notesHtml = (sec.notes || [])
-              .map((n) => `<span class="tss-sched-row-note">${escapeHtml(n)}</span>`)
-              .join("");
-            return `
-              <label class="tss-sched-row">
-                <input type="checkbox" data-pkg="${escapeHtml(sec.pkgId)}" ${checked} />
-                <span class="tss-sched-row-main">
-                  <strong>${escapeHtml(sec.label)}</strong>
-                  <span class="tss-sched-row-sub">${escapeHtml(methods)} · ${escapeHtml(days || "TBA")} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
-                  ${notesHtml}
-                </span>
-              </label>
-            `;
-          })
-          .join("");
-        return `<div class="tss-sched-course"><div class="tss-sched-course-title">${escapeHtml(code)}</div>${rows}</div>`;
-      })
-      .join("");
-
-    listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-      cb.addEventListener("change", (e) => {
-        const pkg = e.target.getAttribute("data-pkg");
-        const sel = currentSelected();
-        if (e.target.checked) sel.add(pkg);
-        else sel.delete(pkg);
-        setSelected(sel);
-        persist();
-        render();
+      const byCourse = {};
+      Object.values(catalog).forEach((sec) => {
+        if (!byCourse[sec.courseCode]) byCourse[sec.courseCode] = [];
+        byCourse[sec.courseCode].push(sec);
       });
-    });
-  }
+
+      const courseCodes = Object.keys(byCourse).sort();
+      if (courseCodes.length === 0) {
+        listEl.innerHTML = `<p class="tss-sched-empty">Open a course's "Class Sections" tab in TSS to see it here. (You don't need to click "Go To Booking" — just viewing sections is enough.)</p>`;
+        return;
+      }
+
+      listEl.innerHTML = courseCodes
+        .map((code) => {
+          const sections = byCourse[code].sort((a, b) => a.label.localeCompare(b.label));
+          const rows = sections
+            .map((sec) => {
+              const checked = selected.has(sec.pkgId) ? "checked" : "";
+              const methods = Array.from(new Set(sec.meetings.map((m) => m.method))).join("/");
+              const days = Array.from(new Set(sec.meetings.flatMap((m) => m.days))).join(",");
+              const notesHtml = (sec.notes || [])
+                .map((n) => `<span class="tss-sched-row-note">${escapeHtml(n)}</span>`)
+                .join("");
+              return `
+                <label class="tss-sched-row">
+                  <input type="checkbox" data-pkg="${escapeHtml(sec.pkgId)}" ${checked} />
+                  <span class="tss-sched-row-main">
+                    <strong>${escapeHtml(sec.label)}</strong>
+                    <span class="tss-sched-row-sub">${escapeHtml(methods)} · ${escapeHtml(days || "TBA")} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
+                    ${notesHtml}
+                  </span>
+                </label>
+              `;
+            })
+            .join("");
+
+          // Added a remove button (tss-sched-remove-course) next to course header
+          return `
+            <div class="tss-sched-course">
+              <div class="tss-sched-course-header">
+                <span class="tss-sched-course-title">${escapeHtml(code)}</span>
+                <button class="tss-sched-remove-course" data-course="${escapeHtml(code)}" title="Remove ${escapeHtml(code)}">✕</button>
+              </div>
+              ${rows}
+            </div>
+          `;
+        })
+        .join("");
+
+      // Handle checkbox change
+      listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+        cb.addEventListener("change", (e) => {
+          const pkg = e.target.getAttribute("data-pkg");
+          const sel = currentSelected();
+          if (e.target.checked) sel.add(pkg);
+          else sel.delete(pkg);
+          setSelected(sel);
+          persist();
+          render();
+        });
+      });
+
+      // Handle course delete click
+      listEl.querySelectorAll(".tss-sched-remove-course").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const courseCode = e.currentTarget.getAttribute("data-course");
+          
+          // Remove all sections of this course from catalog & plan selections
+          Object.keys(catalog).forEach((pkgId) => {
+            if (catalog[pkgId].courseCode === courseCode) {
+              delete catalog[pkgId];
+              Object.keys(plans).forEach((planName) => {
+                plans[planName] = plans[planName].filter((id) => id !== pkgId);
+              });
+            }
+          });
+
+          persist();
+          render();
+        });
+      });
+    }
 
   function renderGrid() {
     const gridEl = document.getElementById("tss-sched-grid");
