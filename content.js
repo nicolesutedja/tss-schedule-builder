@@ -19,8 +19,6 @@
   // ---------- 2. State ----------
   const DAY_COLS = { M: 0, Tu: 1, W: 2, Th: 3, F: 4 };
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const GRID_START_MIN = 7 * 60; // 7:00 AM
-  const GRID_END_MIN = 22 * 60; // 10:00 PM
   const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640 };
 
   let catalog = {}; // pkgId -> section object
@@ -55,7 +53,6 @@
     return h * 60 + min;
   }
 
-  // "Tu, Th 09:30 AM - 10:50 AM In Person @ Galbraith Hall Room 242\nFinal Examination ..."
   function parseSched(schedStr) {
     if (!schedStr) return [];
     const lines = schedStr.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -92,7 +89,7 @@
     return `hsl(${hue}, 65%, 55%)`;
   }
 
-  // ---------- 4. Ingest captured events into the catalog ----------
+  // ---------- 4. Ingest captured events into catalog ----------
   function ingestEvents(events) {
     let changed = false;
     for (const ev of events) {
@@ -118,7 +115,6 @@
 
       const section = catalog[pkgId];
       if (!section.notes) section.notes = [];
-      // Keep seat info fresh
       section.seatsAvailable = ev.EventPkgSeatsAvailable;
       section.seatsLimit = ev.EventPkgLimit;
       section.waitlist = ev.EventPkgNumOnWaitl;
@@ -167,7 +163,7 @@
         tss_schedule_panel_state: panelState,
       });
     } catch (e) {
-      /* extension context may be reloading; ignore */
+      /* ignore extension reload errors */
     }
   }
 
@@ -179,14 +175,13 @@
           "tss_schedule_plans",
           "tss_schedule_active_plan",
           "tss_schedule_panel_state",
-          "tss_schedule_selected", // legacy key from v0.1, migrated below
+          "tss_schedule_selected",
         ],
         (res) => {
           if (res.tss_schedule_catalog) catalog = res.tss_schedule_catalog;
           if (res.tss_schedule_plans) {
             plans = res.tss_schedule_plans;
           } else if (res.tss_schedule_selected) {
-            // migrate old single-selection format into "Plan A"
             plans = { "Plan A": res.tss_schedule_selected };
           }
           if (res.tss_schedule_active_plan && plans[res.tss_schedule_active_plan]) {
@@ -234,7 +229,7 @@
     let startX, startY, startLeft, startTop;
 
     handleEl.addEventListener("mousedown", (e) => {
-      if (e.target.closest("button, select")) return; // don't drag when clicking controls
+      if (e.target.closest("button, select")) return;
       dragging = true;
       const rect = panelEl.getBoundingClientRect();
       startX = e.clientX;
@@ -302,7 +297,7 @@
       <button id="tss-sched-toggle" title="Toggle schedule builder">📅 Schedule</button>
       <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
-          <span>Schedule Builder</span>
+          <span>Schedule Builder TEST</span>
           <div class="tss-sched-header-controls">
             <select id="tss-sched-plan-select" title="Switch schedule plan"></select>
             <button id="tss-sched-plan-new" title="New plan">+</button>
@@ -386,93 +381,87 @@
   }
 
   function renderList() {
-      const listEl = document.getElementById("tss-sched-list");
-      if (!listEl) return;
-      const selected = currentSelected();
+    const listEl = document.getElementById("tss-sched-list");
+    if (!listEl) return;
+    const selected = currentSelected();
 
-      const byCourse = {};
-      Object.values(catalog).forEach((sec) => {
-        if (!byCourse[sec.courseCode]) byCourse[sec.courseCode] = [];
-        byCourse[sec.courseCode].push(sec);
-      });
+    const byCourse = {};
+    Object.values(catalog).forEach((sec) => {
+      if (!byCourse[sec.courseCode]) byCourse[sec.courseCode] = [];
+      byCourse[sec.courseCode].push(sec);
+    });
 
-      const courseCodes = Object.keys(byCourse).sort();
-      if (courseCodes.length === 0) {
-        listEl.innerHTML = `<p class="tss-sched-empty">Open a course's "Class Sections" tab in TSS to see it here. (You don't need to click "Go To Booking" — just viewing sections is enough.)</p>`;
-        return;
-      }
-
-      listEl.innerHTML = courseCodes
-        .map((code) => {
-          const sections = byCourse[code].sort((a, b) => a.label.localeCompare(b.label));
-          const rows = sections
-            .map((sec) => {
-              const checked = selected.has(sec.pkgId) ? "checked" : "";
-              const methods = Array.from(new Set(sec.meetings.map((m) => m.method))).join("/");
-              const days = Array.from(new Set(sec.meetings.flatMap((m) => m.days))).join(",");
-              const notesHtml = (sec.notes || [])
-                .map((n) => `<span class="tss-sched-row-note">${escapeHtml(n)}</span>`)
-                .join("");
-              return `
-                <label class="tss-sched-row">
-                  <input type="checkbox" data-pkg="${escapeHtml(sec.pkgId)}" ${checked} />
-                  <span class="tss-sched-row-main">
-                    <strong>${escapeHtml(sec.label)}</strong>
-                    <span class="tss-sched-row-sub">${escapeHtml(methods)} · ${escapeHtml(days || "TBA")} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
-                    ${notesHtml}
-                  </span>
-                </label>
-              `;
-            })
-            .join("");
-
-          // Added a remove button (tss-sched-remove-course) next to course header
-          return `
-            <div class="tss-sched-course">
-              <div class="tss-sched-course-header">
-                <span class="tss-sched-course-title">${escapeHtml(code)}</span>
-                <button class="tss-sched-remove-course" data-course="${escapeHtml(code)}" title="Remove ${escapeHtml(code)}">✕</button>
-              </div>
-              ${rows}
-            </div>
-          `;
-        })
-        .join("");
-
-      // Handle checkbox change
-      listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-        cb.addEventListener("change", (e) => {
-          const pkg = e.target.getAttribute("data-pkg");
-          const sel = currentSelected();
-          if (e.target.checked) sel.add(pkg);
-          else sel.delete(pkg);
-          setSelected(sel);
-          persist();
-          render();
-        });
-      });
-
-      // Handle course delete click
-      listEl.querySelectorAll(".tss-sched-remove-course").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const courseCode = e.currentTarget.getAttribute("data-course");
-          
-          // Remove all sections of this course from catalog & plan selections
-          Object.keys(catalog).forEach((pkgId) => {
-            if (catalog[pkgId].courseCode === courseCode) {
-              delete catalog[pkgId];
-              Object.keys(plans).forEach((planName) => {
-                plans[planName] = plans[planName].filter((id) => id !== pkgId);
-              });
-            }
-          });
-
-          persist();
-          render();
-        });
-      });
+    const courseCodes = Object.keys(byCourse).sort();
+    if (courseCodes.length === 0) {
+      listEl.innerHTML = `<p class="tss-sched-empty">Open a course's "Class Sections" tab in TSS to see it here.</p>`;
+      return;
     }
+
+    listEl.innerHTML = courseCodes
+      .map((code) => {
+        const sections = byCourse[code].sort((a, b) => a.label.localeCompare(b.label));
+        const rows = sections
+          .map((sec) => {
+            const checked = selected.has(sec.pkgId) ? "checked" : "";
+            const methods = Array.from(new Set(sec.meetings.map((m) => m.method))).join("/");
+            const days = Array.from(new Set(sec.meetings.flatMap((m) => m.days))).join(",");
+            const notesHtml = (sec.notes || [])
+              .map((n) => `<span class="tss-sched-row-note">${escapeHtml(n)}</span>`)
+              .join("");
+            return `
+              <label class="tss-sched-row">
+                <input type="checkbox" data-pkg="${escapeHtml(sec.pkgId)}" ${checked} />
+                <span class="tss-sched-row-main">
+                  <strong>${escapeHtml(sec.label)}</strong>
+                  <span class="tss-sched-row-sub">${escapeHtml(methods)} · ${escapeHtml(days || "TBA")} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
+                  ${notesHtml}
+                </span>
+              </label>
+            `;
+          })
+          .join("");
+
+        return `
+          <div class="tss-sched-course">
+            <div class="tss-sched-course-header">
+              <span class="tss-sched-course-title">${escapeHtml(code)}</span>
+              <button class="tss-sched-remove-course" data-course="${escapeHtml(code)}" title="Remove ${escapeHtml(code)}">✕</button>
+            </div>
+            ${rows}
+          </div>
+        `;
+      })
+      .join("");
+
+    listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", (e) => {
+        const pkg = e.target.getAttribute("data-pkg");
+        const sel = currentSelected();
+        if (e.target.checked) sel.add(pkg);
+        else sel.delete(pkg);
+        setSelected(sel);
+        persist();
+        render();
+      });
+    });
+
+    listEl.querySelectorAll(".tss-sched-remove-course").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const courseCode = e.currentTarget.getAttribute("data-course");
+        Object.keys(catalog).forEach((pkgId) => {
+          if (catalog[pkgId].courseCode === courseCode) {
+            delete catalog[pkgId];
+            Object.keys(plans).forEach((planName) => {
+              plans[planName] = plans[planName].filter((id) => id !== pkgId);
+            });
+          }
+        });
+        persist();
+        render();
+      });
+    });
+  }
 
   function renderGrid() {
     const gridEl = document.getElementById("tss-sched-grid");
@@ -480,7 +469,6 @@
     const selected = currentSelected();
     const selectedSections = Array.from(selected).map((pkgId) => catalog[pkgId]).filter(Boolean);
 
-    // 1. Calculate minTime & maxTime strictly from selected classes
     let minTime = Infinity;
     let maxTime = -Infinity;
 
@@ -493,24 +481,17 @@
       });
     });
 
-    // Fallback defaults if no classes are selected or times aren't parsed yet
     if (minTime === Infinity || maxTime === -Infinity) {
-      minTime = 8 * 60;  // 8:00 AM
-      maxTime = 17 * 60; // 5:00 PM
+      minTime = 8 * 60;
+      maxTime = 17 * 60;
     }
 
-    // 2. Add a 30-minute buffer padding above the earliest start & below the latest end
-    // Snap to full hour boundaries
     const dynamicStartMin = Math.max(0, Math.floor((minTime - 30) / 60) * 60);
     const dynamicEndMin = Math.min(24 * 60, Math.ceil((maxTime + 30) / 60) * 60);
-
     const totalMin = dynamicEndMin - dynamicStartMin;
-    
-    // 3. Dynamically adjust pxPerMin so short schedules scale vertically and stay readable
     const pxPerMin = Math.max(1.3, 520 / totalMin);
     const gridHeight = totalMin * pxPerMin;
 
-    // 4. Generate Hour Labels
     let hourLabels = "";
     for (let t = dynamicStartMin; t <= dynamicEndMin; t += 60) {
       const top = (t - dynamicStartMin) * pxPerMin;
@@ -520,12 +501,10 @@
     }
 
     let dayCols = DAY_LABELS.map((d) => `<div class="tss-sched-daycol-label">${d}</div>`).join("");
-
     let blocks = "";
     let weekendNotes = [];
     let conflictPairs = [];
 
-    // Flatten to per-day-meeting entries
     const perDay = { M: [], Tu: [], W: [], Th: [], F: [] };
     selectedSections.forEach((sec) => {
       sec.meetings.forEach((m) => {
@@ -555,10 +534,8 @@
       entries.forEach(({ sec, m, conflict }) => {
         const col = DAY_COLS[day];
         const color = conflict ? "#d64545" : colorForCourse(sec.courseCode);
-        
         const top = Math.max(0, (m.startMin - dynamicStartMin) * pxPerMin);
         const height = Math.max(20, (m.endMin - m.startMin) * pxPerMin);
-        
         const method = m.method ? ` (${m.method})` : "";
         const courseTitle = `${sec.courseCode}${method}`;
         const timeRange = `${m.start} - ${m.end}`;
@@ -582,7 +559,6 @@
             <div class="tss-block-instructor-line">
               👤 ${escapeHtml(instructor)}
             </div>
-
           </div>
         `;
       });
@@ -590,24 +566,242 @@
 
     gridEl.innerHTML = `
       <div class="tss-sched-daycols-header">${dayCols}</div>
-      <div class="tss-sched-grid-scroll" style="height:${gridHeight}px; --hour-height:${60 * pxPerMin}px;"> <div class="tss-sched-hours">${hourLabels}</div>
+      <div class="tss-sched-grid-scroll" style="height:${gridHeight}px; --hour-height:${60 * pxPerMin}px;"> 
+        <div class="tss-sched-hours">${hourLabels}</div>
         <div class="tss-sched-columns">${blocks}</div>
       </div>
       ${conflictPairs.length ? `<div class="tss-sched-conflict-note">⚠ ${conflictPairs.map(escapeHtml).join("<br>⚠ ")}</div>` : ""}
       ${weekendNotes.length ? `<div class="tss-sched-weekend-note">${weekendNotes.map(escapeHtml).join("<br>")}</div>` : ""}
     `;
+    }
+
+  // ---------- 8. Export Helpers ----------
+  function generateICS(selectedSections) {
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//TSS Schedule Helper//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH'
+    ];
+
+    const dayMap = {
+      'M': 'MO', 'Mon': 'MO', 'Monday': 'MO',
+      'T': 'TU', 'Tu': 'TU', 'Tue': 'TU', 'Tuesday': 'TU',
+      'W': 'WE', 'Wed': 'WE', 'Wednesday': 'WE',
+      'Th': 'TH', 'Thu': 'TH', 'Thursday': 'TH', 'R': 'TH',
+      'F': 'FR', 'Fri': 'FR', 'Friday': 'FR',
+      'Sa': 'SA', 'Sat': 'SA', 'Saturday': 'SA',
+      'Su': 'SU', 'Sun': 'SU', 'Sunday': 'SU'
+    };
+
+    function getNextDateForDay(dayCode) {
+      const targetDayMap = { 'MO': 1, 'TU': 2, 'WE': 3, 'TH': 4, 'FR': 5, 'SA': 6, 'SU': 0 };
+      const targetDay = targetDayMap[dayCode];
+      const today = new Date();
+      const result = new Date(today);
+      result.setDate(today.getDate() + ((targetDay + 7 - today.getDay()) % 7));
+      return result;
+    }
+
+    function formatICSDate(date, minutesFromMidnight) {
+      const h = Math.floor(minutesFromMidnight / 60);
+      const m = minutesFromMidnight % 60;
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      const hh = String(h).padStart(2, '0');
+      const mi = String(m).padStart(2, '0');
+      return `${yyyy}${mm}${dd}T${hh}${mi}00`;
+    }
+
+    const nowStamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+    selectedSections.forEach((sec) => {
+      (sec.meetings || []).forEach((m, idx) => {
+        const rawDays = Array.isArray(m.days) ? m.days : [m.days];
+        const byDays = rawDays.map(d => dayMap[d.trim()]).filter(Boolean);
+
+        if (byDays.length === 0 || m.startMin == null || m.endMin == null) return;
+
+        const firstDate = getNextDateForDay(byDays[0]);
+        const dtStart = formatICSDate(firstDate, m.startMin);
+        const dtEnd = formatICSDate(firstDate, m.endMin);
+
+        // Matches the exact title format from your schedule grid blocks
+        const methodStr = m.method ? ` (${m.method})` : '';
+        const cleanSummary = `${sec.courseCode}${methodStr}`;
+
+        lines.push('BEGIN:VEVENT');
+        lines.push(`UID:${sec.pkgId || Math.random().toString(36).substring(2)}-${idx}@tss-helper`);
+        lines.push(`DTSTAMP:${nowStamp}`);
+        lines.push(`DTSTART:${dtStart}`);
+        lines.push(`DTEND:${dtEnd}`);
+        lines.push(`RRULE:FREQ=WEEKLY;BYDAY=${byDays.join(',')}`);
+        lines.push(`SUMMARY:${cleanSummary}`);
+        lines.push(`LOCATION:${m.location || 'TBA'}`);
+        lines.push(`DESCRIPTION:Section: ${sec.label || ''}\\nInstructor: ${m.instructor || 'TBA'}\\nSeats: ${sec.seatsAvailable || 0}/${sec.seatsLimit || 0}`);
+        lines.push('END:VEVENT');
+      });
+    });
+
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+  }
+
+  function downloadFile(content, fileName, contentType) {
+    const blob = new Blob([content], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
+    
+  function exportCalendarToPDF() {
+    const gridEl = document.querySelector('.tss-sched-grid-scroll');
+    const dayHeaderEl = document.querySelector('.tss-sched-daycols-header');
+
+    if (!gridEl) {
+      alert('No schedule calendar available to export.');
+      return;
+    }
+
+    // Preserve computed background colors from live calendar blocks
+    const originalBlocks = gridEl.querySelectorAll('.tss-sched-block');
+    const clonedGrid = gridEl.cloneNode(true);
+    const clonedBlocks = clonedGrid.querySelectorAll('.tss-sched-block');
+
+    originalBlocks.forEach((origBlock, index) => {
+      if (clonedBlocks[index]) {
+        const computedBg = window.getComputedStyle(origBlock).backgroundColor;
+        clonedBlocks[index].style.setProperty('background-color', computedBg, 'important');
+      }
+    });
+
+    const appStyles = Array.from(
+      document.querySelectorAll('style, link[rel="stylesheet"]')
+    )
+      .map(s => s.outerHTML)
+      .join('\n');
+
+    const iframe = document.createElement('iframe');
+
+    Object.assign(iframe.style, {
+      position: 'fixed',
+      right: '0',
+      bottom: '0',
+      width: '0',
+      height: '0',
+      border: '0',
+      visibility: 'hidden'
+    });
+
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    const clonedHeader = dayHeaderEl ? dayHeaderEl.cloneNode(true) : null;
+
+    doc.open();
+
+    doc.write(`
+  <!DOCTYPE html>
+  <html>
+  <head>
+  <title>${escapeHtml(activePlan)}-Schedule</title>
+  ${appStyles}
+  <link rel="stylesheet" href="pdf-print.css">
+  </head>
+
+  <body>
+  <div class="tss-pdf-container">
+    <div class="tss-pdf-header">
+      <h1>Weekly Schedule — ${escapeHtml(activePlan)}</h1>
+      <p>Generated: ${new Date().toLocaleDateString()}</p>
+    </div>
+  </div>
+  </body>
+  </html>
+  `);
+
+    doc.close();
+
+    const container = doc.querySelector('.tss-pdf-container');
+
+    if (clonedHeader) {
+      container.appendChild(clonedHeader);
+    }
+
+    container.appendChild(clonedGrid);
+
+    iframe.onload = async () => {
+      if (iframe.contentDocument.fonts) {
+        await iframe.contentDocument.fonts.ready;
+      }
+
+      requestAnimationFrame(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1000);
+      });
+    };
+  }
+
+  function setupExportControls() {
+    const headerEl = document.querySelector('.tss-sched-header');
+    if (!headerEl || document.getElementById('tss-sched-export-group')) return;
+
+    const exportGroup = document.createElement('div');
+    exportGroup.className = 'tss-export-group';
+    exportGroup.id = 'tss-sched-export-group';
+    exportGroup.innerHTML = `
+      <button class="tss-header-btn" id="tss-export-ics" title="Export to Calendar (.ics)">
+        📅 ICS
+      </button>
+      <button class="tss-header-btn" id="tss-export-pdf" title="Export as PDF">
+        📄 PDF
+      </button>
+    `;
+
+    headerEl.querySelector('.tss-sched-header-controls').prepend(exportGroup);
+
+    // Direct ICS Export
+    document.getElementById('tss-export-ics').addEventListener('click', () => {
+      const selected = currentSelected();
+      const activeSections = Object.values(catalog).filter(sec => selected.has(sec.pkgId));
+      if (activeSections.length === 0) {
+        alert('No classes selected in active schedule to export.');
+        return;
+      }
+      const icsContent = generateICS(activeSections);
+      downloadFile(icsContent, `schedule-${activePlan.toLowerCase().replace(/\s+/g, '-')}.ics`, 'text/calendar;charset=utf-8;');
+    });
+
+    // Direct PDF Export
+    document.getElementById('tss-export-pdf').addEventListener('click', () => {
+      exportCalendarToPDF();
+    });
   }
 
   function render() {
     if (!document.getElementById("tss-sched-ext-root")) {
       buildPanelSkeleton();
     }
+    setupExportControls();
     renderPlanSelector();
     renderList();
     renderGrid();
   }
 
-  // ---------- 8. Boot ----------
+  // ---------- 9. Boot ----------
   function boot() {
     loadPersisted(render);
   }
