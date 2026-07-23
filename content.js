@@ -26,6 +26,8 @@
   let activePlan = "Plan A";
   let panelState = { ...DEFAULT_PANEL, collapsed: false };
   let panelOpen = false;
+  let activeExamFilter = "ALL"; // "ALL", "Final", or "Midterm"
+  let currentView = "schedule"; // "schedule", "help", or "exams"
 
   // ---------- 3. Helpers ----------
   function escapeHtml(str) {
@@ -54,11 +56,41 @@
   }
 
   function parseSched(schedStr) {
-    if (!schedStr) return [];
+    if (!schedStr) return { meetings: [], exams: [] };
     const lines = schedStr.split("\n").map((l) => l.trim()).filter(Boolean);
     const meetings = [];
+    const exams = [];
+
     for (const line of lines) {
-      if (/^Final Examination/i.test(line)) continue;
+      // Check for Final Exam or Midterm Exam line
+      const isFinal = /^Final Examination/i.test(line);
+      const isMidterm = /^Midterm Examination/i.test(line) || /^Midterm/i.test(line);
+
+      if (isFinal || isMidterm) {
+        // Matches lines like: Final Examination Mon 12/08/2026 8:00 AM - 10:59 AM @ CENTR 101
+        const exMatch = line.match(/(?:Final Examination|Midterm Examination|Midterm)\s+([A-Za-z]+,\s*[A-Za-z]+\s+\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z]+\s+\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}:\d{2}\s?[AP]M)\s*-\s*(\d{1,2}:\d{2}\s?[AP]M)(?:\s+@?\s*(.+))?/i);
+        
+        if (exMatch) {
+          exams.push({
+            type: isFinal ? "Final" : "Midterm",
+            date: exMatch[1].trim(),
+            time: `${exMatch[2]} - ${exMatch[3]}`,
+            location: exMatch[4] ? exMatch[4].trim() : "TBA",
+            raw: line,
+          });
+        } else {
+          // Fallback parsing if exact date/time format varies slightly
+          exams.push({
+            type: isFinal ? "Final" : "Midterm",
+            date: "See schedule details",
+            time: line.replace(/^Final Examination|^Midterm Examination|^Midterm/i, "").trim(),
+            location: "TBA",
+            raw: line,
+          });
+        }
+        continue;
+      }
+
       const m = line.match(/^([A-Za-z,\s]+?)\s+(\d{1,2}:\d{2}\s?[AP]M)\s*-\s*(\d{1,2}:\d{2}\s?[AP]M)\s+(.+)$/i);
       if (!m) continue;
       const days = m[1].split(",").map((d) => d.trim()).filter(Boolean);
@@ -77,7 +109,7 @@
         location,
       });
     }
-    return meetings;
+    return { meetings, exams };
   }
 
   function colorForCourse(courseCode) {
@@ -108,6 +140,7 @@
           seatsLimit: ev.EventPkgLimit,
           waitlist: ev.EventPkgNumOnWaitl,
           meetings: [],
+          exams: [],
           notes: [],
         };
         changed = true;
@@ -115,11 +148,14 @@
 
       const section = catalog[pkgId];
       if (!section.notes) section.notes = [];
+      if (!section.exams) section.exams = [];
       section.seatsAvailable = ev.EventPkgSeatsAvailable;
       section.seatsLimit = ev.EventPkgLimit;
       section.waitlist = ev.EventPkgNumOnWaitl;
 
-      const parsed = parseSched(ev.Sched).map((m) => ({
+      const { meetings: parsedMeetings, exams: parsedExams } = parseSched(ev.Sched);
+
+      const parsed = parsedMeetings.map((m) => ({
         ...m,
         method: ev.TeachingMethod_Text,
         instructor: ev.InstructorName,
@@ -135,6 +171,16 @@
         );
         if (!dup) {
           section.meetings.push(pm);
+          changed = true;
+        }
+      }
+
+      for (const ex of parsedExams) {
+        const dup = section.exams.some(
+          (existing) => existing.date === ex.date && existing.time === ex.time && existing.type === ex.type
+        );
+        if (!dup) {
+          section.exams.push(ex);
           changed = true;
         }
       }
@@ -209,7 +255,7 @@
     ingestEvents(msg.payload);
   });
 
-  // ---------- 7. UI ----------
+  // ---------- 7. UI Helpers ----------
   function applyPanelGeometry(panelEl) {
     panelEl.style.top = panelState.top + "px";
     if (panelState.left != null) {
@@ -290,24 +336,83 @@
     });
   }
 
-  let currentView = "schedule"; // "schedule" or "help"
-
   function renderView() {
     const bodyEl = document.querySelector(".tss-sched-body");
     const helpEl = document.getElementById("tss-sched-help-view");
-    const helpBtn = document.getElementById("tss-sched-help-btn");
+    const examsEl = document.getElementById("tss-sched-exams-view");
 
-    if (!bodyEl || !helpEl) return;
+    const helpBtn = document.getElementById("tss-sched-help-btn");
+    const examsBtn = document.getElementById("tss-sched-exams-btn");
+
+    if (!bodyEl || !helpEl || !examsEl) return;
+
+    // Reset visibility
+    bodyEl.style.display = "none";
+    helpEl.style.display = "none";
+    examsEl.style.display = "none";
+    if (helpBtn) helpBtn.classList.remove("active");
+    if (examsBtn) examsBtn.classList.remove("active");
 
     if (currentView === "help") {
-      bodyEl.style.display = "none";
       helpEl.style.display = "flex";
       if (helpBtn) helpBtn.classList.add("active");
+    } else if (currentView === "exams") {
+      examsEl.style.display = "flex";
+      if (examsBtn) examsBtn.classList.add("active");
+      renderExamsList();
     } else {
       bodyEl.style.display = "flex";
-      helpEl.style.display = "none";
-      if (helpBtn) helpBtn.classList.remove("active");
     }
+  }
+
+  function renderExamsList() {
+    const listContainer = document.getElementById("tss-sched-exams-list");
+    if (!listContainer) return;
+
+    const selectedPkgIds = currentSelected();
+    const selectedSections = Array.from(selectedPkgIds)
+      .map((id) => catalog[id])
+      .filter(Boolean);
+
+    if (selectedSections.length === 0) {
+      listContainer.innerHTML = `<p class="tss-sched-empty">No classes selected. Select classes from your schedule list to view their exam details.</p>`;
+      return;
+    }
+
+    let examItems = [];
+    selectedSections.forEach((sec) => {
+      (sec.exams || []).forEach((ex) => {
+        if (activeExamFilter === "ALL" || ex.type === activeExamFilter) {
+          examItems.push({
+            courseCode: sec.courseCode,
+            label: sec.label,
+            ...ex,
+          });
+        }
+      });
+    });
+
+    if (examItems.length === 0) {
+      const filterLabel = activeExamFilter === "ALL" ? "" : activeExamFilter.toLowerCase() + " ";
+      listContainer.innerHTML = `<p class="tss-sched-empty">No ${filterLabel}exams scheduled for the selected classes.</p>`;
+      return;
+    }
+
+    listContainer.innerHTML = examItems
+      .map(
+        (ex) => `
+        <div class="tss-exam-card" style="background: rgba(0, 0, 0, 0.03); border-left: 4px solid ${colorForCourse(ex.courseCode)}; padding: 12px 16px; margin-bottom: 10px; border-radius: 6px;">
+          <div style="font-weight: bold; font-size: 15px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span style="color: #111827;">${escapeHtml(ex.courseCode)} ${escapeHtml(ex.type)}</span>
+            <span style="font-size: 12px; font-weight: normal; color: #6b7280;">${escapeHtml(ex.label)}</span>
+          </div>
+          <div style="font-size: 13px; margin-bottom: 2px; color: #374151;">📅 <strong>Date:</strong> ${escapeHtml(ex.date)}</div>
+          <div style="font-size: 13px; margin-bottom: 2px; color: #374151;">⏰ <strong>Time:</strong> ${escapeHtml(ex.time)}</div>
+          <div style="font-size: 13px; color: #374151;">📍 <strong>Location:</strong> ${escapeHtml(ex.location)}</div>
+        </div>
+      `
+      )
+      .join("");
   }
 
   function buildPanelSkeleton() {
@@ -325,6 +430,7 @@
             <button id="tss-sched-plan-new" title="New plan">+</button>
             <button id="tss-sched-plan-rename" title="Rename plan">✎</button>
             <button id="tss-sched-plan-delete" title="Delete plan">🗑</button>
+            <button id="tss-sched-exams-btn" title="View Midterms and Finals">📝 Exams</button>
             <button id="tss-sched-help-btn" title="How to use TritonSched">?</button>
             <button id="tss-sched-close" title="Close">✕</button>
           </div>
@@ -333,6 +439,27 @@
           <div id="tss-sched-list" class="tss-sched-list"></div>
           <div id="tss-sched-grid" class="tss-sched-grid"></div>
         </div>
+
+        <!-- EXAMS VIEW -->
+        <div id="tss-sched-exams-view" class="tss-sched-help-container" style="display: none; padding: 24px 20px 20px 20px;">
+          <div class="tss-help-content" style="width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h2 style="margin: 0; color: #111827;">Exam Schedule</h2>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="tss-exam-filter-select" style="font-size: 13px; color: #374151; font-weight: 500;">Filter:</label>
+                <select id="tss-exam-filter-select" style="padding: 6px 10px; border-radius: 6px; background: #ffffff; color: #1f2937; border: 1px solid #d1d5db; font-size: 13px; cursor: pointer; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                  <option value="ALL">All Exams</option>
+                  <option value="Final">Finals</option>
+                  <option value="Midterm">Midterms</option>
+                </select>
+              </div>
+            </div>
+            <div id="tss-sched-exams-list" style="max-height: 380px; overflow-y: auto; padding-right: 4px;"></div>
+            <button id="tss-sched-exams-return-btn" class="tss-primary-btn" style="margin-top: 16px;">← Return to Scheduler</button>
+          </div>
+        </div>
+
+        <!-- HELP VIEW -->
         <div id="tss-sched-help-view" class="tss-sched-help-container" style="display: none;">
           <div class="tss-help-content">
             <h2>How to Use TritonSched</h2>
@@ -381,15 +508,32 @@
       panelEl.classList.toggle("hidden", !panelOpen);
     });
 
-    // Help Toggle Buttons
+    // View Navigation Listeners
     wrap.querySelector("#tss-sched-help-btn").addEventListener("click", () => {
       currentView = currentView === "help" ? "schedule" : "help";
+      renderView();
+    });
+
+    wrap.querySelector("#tss-sched-exams-btn").addEventListener("click", () => {
+      currentView = currentView === "exams" ? "schedule" : "exams";
       renderView();
     });
 
     wrap.querySelector("#tss-sched-return-btn").addEventListener("click", () => {
       currentView = "schedule";
       renderView();
+    });
+
+    wrap.querySelector("#tss-sched-exams-return-btn").addEventListener("click", () => {
+      currentView = "schedule";
+      renderView();
+    });
+
+    // Exam Filter Dropdown Listener
+    const filterSelect = wrap.querySelector("#tss-exam-filter-select");
+    filterSelect.addEventListener("change", (e) => {
+      activeExamFilter = e.target.value;
+      renderExamsList();
     });
 
     wrap.querySelector("#tss-sched-close").addEventListener("click", () => {
@@ -477,8 +621,6 @@
             const checked = selected.has(sec.pkgId) ? "checked" : "";
             const methods = Array.from(new Set(sec.meetings.map((m) => m.method))).join("/");
             const days = Array.from(new Set(sec.meetings.flatMap((m) => m.days))).join(",");
-            
-            // Extract primary instructor name (or default to 'Staff')
             const instructor = sec.meetings.find((m) => m.instructor)?.instructor || "Staff";
 
             const notesHtml = (sec.notes || [])
@@ -549,7 +691,6 @@
       });
     });
 
-    // Attach listeners for RMP buttons inside renderList()
     listEl.querySelectorAll(".tss-sched-rmp-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -560,7 +701,6 @@
           return;
         }
 
-        // Direct search link targeting UC San Diego on RateMyProfessors
         const searchQuery = encodeURIComponent(`${instructorName} UC San Diego`);
         const rmpUrl = `https://www.ratemyprofessors.com/search/professors?q=${searchQuery}`;
 
@@ -679,7 +819,7 @@
       ${conflictPairs.length ? `<div class="tss-sched-conflict-note">⚠ ${conflictPairs.map(escapeHtml).join("<br>⚠ ")}</div>` : ""}
       ${weekendNotes.length ? `<div class="tss-sched-weekend-note">${weekendNotes.map(escapeHtml).join("<br>")}</div>` : ""}
     `;
-    }
+  }
 
   // ---------- 8. Export Helpers ----------
   function generateICS(selectedSections) {
@@ -734,7 +874,6 @@
         const dtStart = formatICSDate(firstDate, m.startMin);
         const dtEnd = formatICSDate(firstDate, m.endMin);
 
-        // Matches the exact title format from your schedule grid blocks
         const methodStr = m.method ? ` (${m.method})` : '';
         const cleanSummary = `${sec.courseCode}${methodStr}`;
 
@@ -768,7 +907,7 @@
       URL.revokeObjectURL(url);
     }, 100);
   }
-    
+
   function exportCalendarToPDF() {
     const gridEl = document.querySelector('.tss-sched-grid-scroll');
     const dayHeaderEl = document.querySelector('.tss-sched-daycols-header');
@@ -778,7 +917,6 @@
       return;
     }
 
-    // Preserve computed background colors from live calendar blocks
     const originalBlocks = gridEl.querySelectorAll('.tss-sched-block');
     const clonedGrid = gridEl.cloneNode(true);
     const clonedBlocks = clonedGrid.querySelectorAll('.tss-sched-block');
@@ -879,7 +1017,6 @@
 
     headerEl.querySelector('.tss-sched-header-controls').prepend(exportGroup);
 
-    // Direct ICS Export
     document.getElementById('tss-export-ics').addEventListener('click', () => {
       const selected = currentSelected();
       const activeSections = Object.values(catalog).filter(sec => selected.has(sec.pkgId));
@@ -891,7 +1028,6 @@
       downloadFile(icsContent, `schedule-${activePlan.toLowerCase().replace(/\s+/g, '-')}.ics`, 'text/calendar;charset=utf-8;');
     });
 
-    // Direct PDF Export
     document.getElementById('tss-export-pdf').addEventListener('click', () => {
       exportCalendarToPDF();
     });
