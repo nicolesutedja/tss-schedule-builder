@@ -294,10 +294,12 @@
     const wrap = document.createElement("div");
     wrap.id = "tss-sched-ext-root";
     wrap.innerHTML = `
-      <button id="tss-sched-toggle" title="Toggle schedule builder">📅 Schedule</button>
-      <div id="tss-sched-panel" class="hidden">
+        <button id="tss-sched-toggle" title="TritonSched">
+          <img src="${chrome.runtime.getURL("logo.png")}" alt="TritonSched logo">
+        </button>      
+        <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
-          <span>Schedule Builder TEST</span>
+          <span>TritonSched (BETA) </span>
           <div class="tss-sched-header-controls">
             <select id="tss-sched-plan-select" title="Switch schedule plan"></select>
             <button id="tss-sched-plan-new" title="New plan">+</button>
