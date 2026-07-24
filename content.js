@@ -42,6 +42,7 @@
   let panelOpen = false;
   let activeExamFilter = "ALL";
   let currentView = "schedule";
+  let collapsedCourses = new Set();
 
   let stateLoaded = false;
   let isInitializing = true; // Prevent saving until storage load finishes
@@ -368,12 +369,18 @@
   function applyListGeometry(listEl, resizeHandleEl) {
     if (panelState.listCollapsed) {
       listEl.classList.add("collapsed");
-      resizeHandleEl.style.display = "none";
+      resizeHandleEl.classList.add("list-collapsed");
     } else {
       listEl.classList.remove("collapsed");
-      resizeHandleEl.style.display = "";
+      resizeHandleEl.classList.remove("list-collapsed");
       listEl.style.width = (panelState.listWidth || DEFAULT_PANEL.listWidth) + "px";
     }
+  }
+
+  function toggleListCollapse(listEl, resizeHandleEl) {
+    panelState.listCollapsed = !panelState.listCollapsed;
+    applyListGeometry(listEl, resizeHandleEl);
+    persist();
   }
 
   function makeListResizable(listEl, handleEl, panelEl) {
@@ -546,9 +553,16 @@
         </button>      
         <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
-          <span>TritonSched 1.0.0</span>
+          <div class="tss-sched-title-group">
+            <span>TritonSched 1.0.0</span>
+            <button id="tss-sched-list-toggle" class="tss-sched-icon-btn" title="Collapse/expand class list">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke="currentColor" stroke-width="1.4"/>
+                <line x1="6" y1="1.5" x2="6" y2="14.5" stroke="currentColor" stroke-width="1.4"/>
+              </svg>
+            </button>
+          </div>
           <div class="tss-sched-header-controls">
-            <button id="tss-sched-list-toggle" title="Collapse/expand class list">☰</button>
             <select id="tss-sched-plan-select" title="Switch schedule plan"></select>
             <button id="tss-sched-plan-new" title="New plan">+</button>
             <button id="tss-sched-plan-rename" title="Rename plan">✎</button>
@@ -710,9 +724,7 @@
     makeListResizable(listEl, listResizeEl, panelEl);
 
     wrap.querySelector("#tss-sched-list-toggle").addEventListener("click", () => {
-      panelState.listCollapsed = !panelState.listCollapsed;
-      applyListGeometry(listEl, listResizeEl);
-      persist();
+      toggleListCollapse(listEl, listResizeEl);
     });
 
     toggleBtn.addEventListener("click", () => {
@@ -954,17 +966,32 @@
           })
           .join("");
 
+        const courseCollapsed = collapsedCourses.has(code);
+
         return `
           <div class="tss-sched-course">
             <div class="tss-sched-course-header">
-              <span class="tss-sched-course-title">${escapeHtml(code)}</span>
+              <button class="tss-sched-course-collapse" data-course="${escapeHtml(code)}" title="${courseCollapsed ? "Expand" : "Collapse"} ${escapeHtml(code)} sections">${courseCollapsed ? "▶" : "▼"}</button>
+              <span class="tss-sched-course-title">${escapeHtml(code)} ${courseCollapsed ? `<span class="tss-sched-course-count">(${sections.length})</span>` : ""}</span>
               <button class="tss-sched-remove-course" data-course="${escapeHtml(code)}" title="Remove ${escapeHtml(code)}">✕</button>
             </div>
-            ${rows}
+            <div class="tss-sched-course-rows" style="${courseCollapsed ? "display: none;" : ""}">
+              ${rows}
+            </div>
           </div>
         `;
       })
       .join("");
+
+    listEl.querySelectorAll(".tss-sched-course-collapse").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const courseCode = e.currentTarget.getAttribute("data-course");
+        if (collapsedCourses.has(courseCode)) collapsedCourses.delete(courseCode);
+        else collapsedCourses.add(courseCode);
+        renderList();
+      });
+    });
 
     listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
       cb.addEventListener("change", (e) => {
