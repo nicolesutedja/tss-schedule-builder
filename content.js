@@ -24,7 +24,7 @@
      ========================================================================== */
   const DAY_COLS = { M: 0, Tu: 1, W: 2, Th: 3, F: 4 };
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640 };
+  const DEFAULT_PANEL = { top: 70, left: null, right: 20, width: 880, height: 640, listWidth: 220, listCollapsed: false };
   const PALETTES = [
     { id: "navy", colors: ["rgb(38, 61, 102)"] },
     { id: "purple", colors: ["#482d55"] },
@@ -42,6 +42,7 @@
   let panelOpen = false;
   let activeExamFilter = "ALL";
   let currentView = "schedule";
+  let collapsedCourses = new Set();
 
   let stateLoaded = false;
   let isInitializing = true; // Prevent saving until storage load finishes
@@ -365,6 +366,51 @@
     });
   }
 
+  function applyListGeometry(listEl, resizeHandleEl) {
+    if (panelState.listCollapsed) {
+      listEl.classList.add("collapsed");
+      resizeHandleEl.classList.add("list-collapsed");
+    } else {
+      listEl.classList.remove("collapsed");
+      resizeHandleEl.classList.remove("list-collapsed");
+      listEl.style.width = (panelState.listWidth || DEFAULT_PANEL.listWidth) + "px";
+    }
+  }
+
+  function toggleListCollapse(listEl, resizeHandleEl) {
+    panelState.listCollapsed = !panelState.listCollapsed;
+    applyListGeometry(listEl, resizeHandleEl);
+    persist();
+  }
+
+  function makeListResizable(listEl, handleEl, panelEl) {
+    let resizing = false;
+    let startX, startW;
+
+    handleEl.addEventListener("mousedown", (e) => {
+      if (panelState.listCollapsed) return;
+      resizing = true;
+      startX = e.clientX;
+      startW = listEl.offsetWidth;
+      e.preventDefault();
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!resizing) return;
+      const dx = e.clientX - startX;
+      const maxWidth = Math.max(140, panelEl.offsetWidth - 160);
+      panelState.listWidth = Math.min(Math.max(140, startW + dx), maxWidth);
+      listEl.style.width = panelState.listWidth + "px";
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (resizing) {
+        resizing = false;
+        persist();
+      }
+    });
+  }
+
   function makeResizable(panelEl, handleEl) {
     let resizing = false;
     let startX, startY, startW, startH;
@@ -503,11 +549,19 @@
     wrap.id = "tss-sched-ext-root";
     wrap.innerHTML = `
         <button id="tss-sched-toggle" title="TritonSched">
-          <img src="${chrome.runtime.getURL("logo48.svg")}" alt="TritonSched logo">
+          <img src="${chrome.runtime.getURL("logo48.png")}" alt="TritonSched logo">
         </button>      
         <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
-          <span>TritonSched 1.0.0</span>
+          <div class="tss-sched-title-group">
+            <span>TritonSched 1.0.0</span>
+            <button id="tss-sched-list-toggle" class="tss-sched-icon-btn" title="Collapse/expand class list">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke="currentColor" stroke-width="1.4"/>
+                <line x1="6" y1="1.5" x2="6" y2="14.5" stroke="currentColor" stroke-width="1.4"/>
+              </svg>
+            </button>
+          </div>
           <div class="tss-sched-header-controls">
             <select id="tss-sched-plan-select" title="Switch schedule plan"></select>
             <button id="tss-sched-plan-new" title="New plan">+</button>
@@ -522,6 +576,7 @@
         
         <div class="tss-sched-body">
           <div id="tss-sched-list" class="tss-sched-list"></div>
+          <div id="tss-sched-list-resize" class="tss-sched-list-resize" title="Drag to resize list"></div>
           <div id="tss-sched-grid" class="tss-sched-grid"></div>
         </div>
 
@@ -662,6 +717,15 @@
     applyPanelGeometry(panelEl);
     makeDraggable(panelEl, wrap.querySelector("#tss-sched-drag-handle"));
     makeResizable(panelEl, wrap.querySelector("#tss-sched-resize-handle"));
+
+    const listEl = wrap.querySelector("#tss-sched-list");
+    const listResizeEl = wrap.querySelector("#tss-sched-list-resize");
+    applyListGeometry(listEl, listResizeEl);
+    makeListResizable(listEl, listResizeEl, panelEl);
+
+    wrap.querySelector("#tss-sched-list-toggle").addEventListener("click", () => {
+      toggleListCollapse(listEl, listResizeEl);
+    });
 
     toggleBtn.addEventListener("click", () => {
       panelOpen = !panelOpen;
@@ -863,9 +927,16 @@
         const rows = sections
           .map((sec) => {
             const checked = selected.has(sec.pkgId) ? "checked" : "";
-            const methods = Array.from(new Set(sec.meetings.map((m) => m.method))).join("/");
-            const days = Array.from(new Set(sec.meetings.flatMap((m) => m.days))).join(",");
             const instructor = sec.meetings.find((m) => m.instructor)?.instructor || "Staff";
+
+            const meetingLinesHtml = sec.meetings.length
+              ? sec.meetings
+                  .map((m) => {
+                    const dayStr = m.days.join("");
+                    return `<span class="tss-sched-row-sub">${escapeHtml(m.method || "")} ${escapeHtml(dayStr || "TBA")} ${escapeHtml(m.start)}-${escapeHtml(m.end)}</span>`;
+                  })
+                  .join("")
+              : `<span class="tss-sched-row-sub">TBA</span>`;
 
             const notesHtml = (sec.notes || [])
               .map((n) => `<span class="tss-sched-row-note">${escapeHtml(n)}</span>`)
@@ -877,7 +948,8 @@
                   <input type="checkbox" data-pkg="${escapeHtml(sec.pkgId)}" ${checked} />
                   <span class="tss-sched-row-main">
                     <strong>${escapeHtml(sec.label)}</strong>
-                    <span class="tss-sched-row-sub">${escapeHtml(methods)} · ${escapeHtml(days || "TBA")} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
+                    ${meetingLinesHtml}
+                    <span class="tss-sched-row-sub">${escapeHtml(instructor)} · ${escapeHtml(sec.seatsAvailable)}/${escapeHtml(sec.seatsLimit)} seats</span>
                     ${notesHtml}
                   </span>
                 </label>
@@ -894,17 +966,32 @@
           })
           .join("");
 
+        const courseCollapsed = collapsedCourses.has(code);
+
         return `
           <div class="tss-sched-course">
             <div class="tss-sched-course-header">
-              <span class="tss-sched-course-title">${escapeHtml(code)}</span>
+              <button class="tss-sched-course-collapse" data-course="${escapeHtml(code)}" title="${courseCollapsed ? "Expand" : "Collapse"} ${escapeHtml(code)} sections">${courseCollapsed ? "▶" : "▼"}</button>
+              <span class="tss-sched-course-title">${escapeHtml(code)} ${courseCollapsed ? `<span class="tss-sched-course-count">(${sections.length})</span>` : ""}</span>
               <button class="tss-sched-remove-course" data-course="${escapeHtml(code)}" title="Remove ${escapeHtml(code)}">✕</button>
             </div>
-            ${rows}
+            <div class="tss-sched-course-rows" style="${courseCollapsed ? "display: none;" : ""}">
+              ${rows}
+            </div>
           </div>
         `;
       })
       .join("");
+
+    listEl.querySelectorAll(".tss-sched-course-collapse").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const courseCode = e.currentTarget.getAttribute("data-course");
+        if (collapsedCourses.has(courseCode)) collapsedCourses.delete(courseCode);
+        else collapsedCourses.add(courseCode);
+        renderList();
+      });
+    });
 
     listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
       cb.addEventListener("change", (e) => {

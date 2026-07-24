@@ -95,6 +95,30 @@
   flex-wrap: wrap;
 }
 
+.tss-sched-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tss-sched-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 3px;
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 0;
+}
+
+.tss-sched-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
 .tss-sched-header-controls {
   display: flex;
   align-items: center;
@@ -138,12 +162,31 @@
 }
 
 .tss-sched-list {
-  width: 40%;
-  max-width: 300px;
+  width: 220px;
+  flex-shrink: 0;
   border-right: 1px solid #e2e2e2;
   overflow-y: auto;
   padding: 10px;
   font-size: 13px;
+}
+
+.tss-sched-list.collapsed {
+  display: none;
+}
+
+.tss-sched-list-resize {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.tss-sched-list-resize:hover {
+  background: #d0d5dd;
+}
+
+.tss-sched-list-resize.list-collapsed {
+  cursor: default;
 }
 
 .tss-sched-empty { 
@@ -156,13 +199,38 @@
   margin-bottom: 12px; 
 }
 
+.tss-sched-course-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
 .tss-sched-course-title {
+  flex: 1;
   font-weight: 700;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: #182B49;
-  margin-bottom: 4px;
+}
+
+.tss-sched-course-collapse {
+  background: transparent;
+  border: none;
+  color: #182B49;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.tss-sched-course-count {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #888;
+  font-size: 11px;
 }
 
 .tss-sched-row {
@@ -188,6 +256,7 @@
 }
 
 .tss-sched-row-sub { 
+  display: block;
   color: #666; 
   font-size: 11px; 
 }
