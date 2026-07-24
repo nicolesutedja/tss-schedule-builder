@@ -57,7 +57,7 @@ Developed by **Nicole Sutedja.**
 
 ---
 
-## For Developers
+## Developer / Build Mode
 
 ### Prerequisites
 
@@ -79,10 +79,14 @@ npm install
 
 ### 3. Start Development Server
 
-Runs Vite with file watching and Hot Module Replacement (HMR).
+Runs Vite with file watching and Hot Module Replacement (HMR):
 
 ```bash
 npm run dev
+```
+Or run build once finalizing:
+```bash
+npm run build
 ```
 
 ### 4. Load the Extension
@@ -93,9 +97,8 @@ npm run dev
 4. Select the generated `dist/` directory
 5. Open **https://tss.ucsd.edu**
 
-Changes made inside `src/` will automatically trigger a rebuild and extension reload.
-
 ---
+
 
 ## 📄 License
 
