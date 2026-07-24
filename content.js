@@ -503,7 +503,7 @@
     wrap.id = "tss-sched-ext-root";
     wrap.innerHTML = `
         <button id="tss-sched-toggle" title="TritonSched">
-          <img src="${chrome.runtime.getURL("logo48.svg")}" alt="TritonSched logo">
+          <img src="${chrome.runtime.getURL("logo48.png")}" alt="TritonSched logo">
         </button>      
         <div id="tss-sched-panel" class="hidden">
         <div class="tss-sched-header" id="tss-sched-drag-handle">
